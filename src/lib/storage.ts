@@ -1,27 +1,10 @@
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { randomUUID } from "crypto";
+import { ALLOWED_TYPES } from "./storage-constants";
 
-const ALLOWED_TYPES: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/jpg": "jpg",
-  "image/png": "png",
-  "image/gif": "gif",
-  "image/webp": "webp",
-};
-
-export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
-export const MAX_IMAGES_PER_POST = 4;
-
-export function validateImage(file: File): string | null {
-  if (!ALLOWED_TYPES[file.type]) {
-    return "Formato não suportado. Use JPEG, PNG, GIF ou WebP.";
-  }
-  if (file.size > MAX_FILE_SIZE) {
-    return "Arquivo muito grande. Máximo 10 MB.";
-  }
-  return null;
-}
+// Re-export client-safe helpers for existing server-side importers.
+export { ALLOWED_TYPES, MAX_FILE_SIZE, MAX_IMAGES_PER_POST, validateImage } from "./storage-constants";
 
 export async function uploadFile(buffer: Buffer, mimeType: string): Promise<string> {
   const ext = ALLOWED_TYPES[mimeType] ?? "bin";

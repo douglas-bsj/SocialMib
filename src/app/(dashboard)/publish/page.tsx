@@ -13,7 +13,7 @@ import {
   Send, Clock, Image as ImageIcon, Smile, Hash, AlertCircle,
   Sparkles, Wand2, RefreshCw, X, ArrowLeft, Plus, Loader2,
 } from "lucide-react";
-import { MAX_IMAGES_PER_POST } from "@/lib/storage";
+import { MAX_IMAGES_PER_POST } from "@/lib/storage-constants";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";

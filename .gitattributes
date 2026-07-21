@@ -1,0 +1,4 @@
+# Shell scripts must always use LF, even on Windows checkouts (autocrlf),
+# otherwise the shebang breaks inside Linux containers ("no such file or directory").
+*.sh text eol=lf
+scripts/docker-entrypoint.sh text eol=lf
