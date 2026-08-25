@@ -75,9 +75,11 @@ export function MembersClient({ workspaceId, isOwner, owner, initialMembers }: P
   const [members, setMembers] = useState<Member[]>(initialMembers);
 
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteName, setInviteName] = useState("");
   const [inviteRole, setInviteRole] = useState<"ADMIN" | "MEMBER">("MEMBER");
   const [inviteStatus, setInviteStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [inviting, setInviting] = useState(false);
+  const [needsName, setNeedsName] = useState(false);
 
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -90,14 +92,29 @@ export function MembersClient({ workspaceId, isOwner, owner, initialMembers }: P
       const res = await fetch(`/api/workspaces/${workspaceId}/members`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
+        body: JSON.stringify({ email: inviteEmail, role: inviteRole, name: inviteName || undefined }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setInviteStatus({ type: "error", message: data.error });
+        if (res.status === 404 && !needsName) {
+          setNeedsName(true);
+          setInviteStatus({
+            type: "error",
+            message: "Não existe conta com esse e-mail. Informe o nome abaixo para criar uma conta nova.",
+          });
+        } else {
+          setInviteStatus({ type: "error", message: data.error });
+        }
       } else {
-        setInviteStatus({ type: "success", message: `${inviteEmail} adicionado ao workspace.` });
+        setInviteStatus({
+          type: "success",
+          message: data.tempPassword
+            ? `Conta criada para ${inviteEmail}. Senha temporária: ${data.tempPassword} — compartilhe com a pessoa; ela pode trocá-la depois em Configurações.`
+            : `${inviteEmail} adicionado ao workspace.`,
+        });
         setInviteEmail("");
+        setInviteName("");
+        setNeedsName(false);
         setMembers((prev) => [
           ...prev,
           {
@@ -152,7 +169,9 @@ export function MembersClient({ workspaceId, isOwner, owner, initialMembers }: P
         <div className="rounded-xl border border-gray-200 bg-white">
           <div className="px-6 py-4 border-b border-gray-100">
             <h2 className="text-sm font-semibold text-gray-700">Adicionar membro</h2>
-            <p className="text-xs text-gray-400 mt-0.5">O usuário deve já ter uma conta no Mib Social.</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Se o e-mail já tiver uma conta, a pessoa é adicionada direto. Caso contrário, criamos uma conta nova.
+            </p>
           </div>
           <div className="px-6 py-5">
             <form onSubmit={invite} className="space-y-4">
@@ -164,7 +183,10 @@ export function MembersClient({ workspaceId, isOwner, owner, initialMembers }: P
                     id="invite-email"
                     type="email"
                     value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
+                    onChange={(e) => {
+                      setInviteEmail(e.target.value);
+                      setNeedsName(false);
+                    }}
                     placeholder="usuario@empresa.com"
                     className="mt-1"
                     required
@@ -183,10 +205,26 @@ export function MembersClient({ workspaceId, isOwner, owner, initialMembers }: P
                   </select>
                 </div>
               </div>
+              {needsName && (
+                <div>
+                  <Label htmlFor="invite-name">Nome completo (para criar a conta)</Label>
+                  <Input
+                    id="invite-name"
+                    type="text"
+                    value={inviteName}
+                    onChange={(e) => setInviteName(e.target.value)}
+                    placeholder="Nome da pessoa"
+                    className="mt-1"
+                    required
+                    minLength={2}
+                    autoFocus
+                  />
+                </div>
+              )}
               <div className="flex justify-end">
                 <Button type="submit" disabled={inviting} className="gap-2 bg-violet-600 hover:bg-violet-700 text-white">
                   <UserPlus className="h-4 w-4" />
-                  {inviting ? "Adicionando..." : "Adicionar membro"}
+                  {inviting ? "Adicionando..." : needsName ? "Criar conta e adicionar" : "Adicionar membro"}
                 </Button>
               </div>
             </form>

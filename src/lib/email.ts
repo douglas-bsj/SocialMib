@@ -80,6 +80,48 @@ export async function sendWorkspaceInviteEmail(
   });
 }
 
+export async function sendNewMemberAccountEmail(
+  email: string,
+  name: string,
+  inviterName: string | null,
+  workspaceName: string,
+) {
+  const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+
+  return resend.emails.send({
+    from: FROM,
+    to: email,
+    subject: `Sua conta no Mib Social foi criada — workspace ${workspaceName}`,
+    html: `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="font-family:system-ui,sans-serif;background:#f9fafb;margin:0;padding:40px 20px;">
+  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:16px;padding:40px;border:1px solid #e5e7eb;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:32px;">
+      <div style="width:32px;height:32px;background:#7c3aed;border-radius:8px;display:flex;align-items:center;justify-content:center;">
+        <span style="color:#fff;font-size:14px;font-weight:700;">M</span>
+      </div>
+      <span style="font-size:18px;font-weight:700;color:#111827;">Mib Social</span>
+    </div>
+    <h1 style="font-size:22px;font-weight:700;color:#111827;margin:0 0 8px;">Olá, ${name.split(" ")[0]}!</h1>
+    <p style="color:#6b7280;font-size:15px;line-height:1.6;margin:0 0 24px;">
+      <strong>${inviterName ?? "Alguém"}</strong> criou uma conta para você no Mib Social e te
+      adicionou ao workspace <strong>${workspaceName}</strong>. Peça a senha de acesso a quem te
+      cadastrou para fazer seu primeiro login — depois você pode trocá-la em Configurações.
+    </p>
+    <a href="${baseUrl}/login" style="display:inline-block;background:#7c3aed;color:#fff;font-weight:600;font-size:15px;padding:12px 28px;border-radius:10px;text-decoration:none;margin-bottom:24px;">
+      Fazer login
+    </a>
+    <p style="color:#9ca3af;font-size:13px;line-height:1.6;margin:0;">
+      Seu e-mail de acesso é <strong>${email}</strong>.
+    </p>
+  </div>
+</body>
+</html>`,
+  });
+}
+
 export async function sendWelcomeEmail(email: string, name: string | null) {
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
 

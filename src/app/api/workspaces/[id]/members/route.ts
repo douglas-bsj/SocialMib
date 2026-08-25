@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomBytes } from "crypto";
+import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { sendWorkspaceInviteEmail } from "@/lib/email";
+import { sendWorkspaceInviteEmail, sendNewMemberAccountEmail } from "@/lib/email";
 import { z } from "zod";
+
+function generateTempPassword() {
+  return randomBytes(14).toString("base64url").slice(0, 18);
+}
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -37,6 +43,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 const inviteSchema = z.object({
   email: z.string().email(),
   role: z.enum(["ADMIN", "MEMBER"]).default("MEMBER"),
+  name: z.string().trim().min(2).optional(),
 });
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -55,15 +62,29 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Dados inválidos." }, { status: 400 });
   }
 
-  const { email, role } = parsed.data;
+  const { email, role, name } = parsed.data;
 
   if (email === session.user.email) {
     return NextResponse.json({ error: "Você já é o dono do workspace." }, { status: 400 });
   }
 
-  const invitedUser = await db.user.findUnique({ where: { email } });
+  let invitedUser = await db.user.findUnique({ where: { email } });
+  let tempPassword: string | null = null;
+  let createdAccount = false;
+
   if (!invitedUser) {
-    return NextResponse.json({ error: "Nenhum usuário com este email encontrado." }, { status: 404 });
+    if (!name) {
+      return NextResponse.json(
+        { error: "Nenhum usuário com este email encontrado. Informe um nome para criar uma conta nova." },
+        { status: 404 }
+      );
+    }
+
+    tempPassword = generateTempPassword();
+    invitedUser = await db.user.create({
+      data: { name, email, password: bcrypt.hashSync(tempPassword, 12) },
+    });
+    createdAccount = true;
   }
 
   const existing = await db.workspaceMember.findUnique({
@@ -81,9 +102,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     db.user.findUnique({ where: { id: session.user.id }, select: { name: true } }),
   ]);
 
-  sendWorkspaceInviteEmail(email, inviter?.name ?? null, workspace.name).catch((err) =>
-    console.error("Invite email failed:", err)
-  );
+  if (createdAccount) {
+    sendNewMemberAccountEmail(email, name!, inviter?.name ?? null, workspace.name).catch((err) =>
+      console.error("New member account email failed:", err)
+    );
+  } else {
+    sendWorkspaceInviteEmail(email, inviter?.name ?? null, workspace.name).catch((err) =>
+      console.error("Invite email failed:", err)
+    );
+  }
 
-  return NextResponse.json({ member }, { status: 201 });
+  return NextResponse.json({ member, tempPassword }, { status: 201 });
 }
