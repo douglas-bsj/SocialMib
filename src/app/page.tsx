@@ -355,11 +355,11 @@ export default function LandingPage() {
           <p style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", margin: 0 }}>© 2026 Mib Social — um produto mibtecno. Todos os direitos reservados.</p>
           <div style={{ display: "flex", gap: 20 }}>
             {[
-              { label: "Privacidade", href: "https://mibtecno.com.br/privacidade" },
-              { label: "Termos", href: "https://mibtecno.com.br/termos" },
-              { label: "Contato", href: "https://mibtecno.com.br/contato" },
+              { label: "Privacidade", href: "/privacidade" },
+              { label: "Termos", href: "/termos" },
+              { label: "Contato", href: "/contato" },
             ].map((l) => (
-              <a key={l.label} href={l.href} style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", textDecoration: "none" }}>{l.label}</a>
+              <Link key={l.label} href={l.href} style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", textDecoration: "none" }}>{l.label}</Link>
             ))}
           </div>
         </div>
