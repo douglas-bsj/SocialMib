@@ -75,12 +75,12 @@ export default function OnboardingPage() {
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/20">
             <Zap className="h-5 w-5 text-white" />
           </div>
-          <span className="text-xl font-bold text-white">SocialPost</span>
+          <span className="text-xl font-bold text-white">Mib Social</span>
         </div>
 
         <div>
           <h1 className="text-3xl font-bold leading-tight text-white">
-            Bem-vindo ao<br />SocialPost
+            Bem-vindo ao<br />Mib Social
           </h1>
           <p className="mt-4 text-violet-200 leading-relaxed">
             Configure seu workspace em minutos e comece a gerenciar todas as suas redes sociais em um único lugar.
@@ -102,7 +102,7 @@ export default function OnboardingPage() {
           </div>
         </div>
 
-        <p className="text-xs text-violet-300">© 2026 SocialPost</p>
+        <p className="text-xs text-violet-300">© 2026 Mib Social — mibtecno.com.br</p>
       </div>
 
       {/* Right panel */}

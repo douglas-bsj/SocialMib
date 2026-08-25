@@ -4,7 +4,7 @@ const features = [
   {
     icon: "📅",
     title: "Agendamento inteligente",
-    description: "Programe posts para múltiplas redes de uma só vez. Defina o melhor horário e deixe o SocialPost publicar.",
+    description: "Programe posts para múltiplas redes de uma só vez. Defina o melhor horário e deixe o Mib Social publicar.",
   },
   {
     icon: "📊",
@@ -68,7 +68,7 @@ const plans = [
 
 const testimonials = [
   {
-    quote: "Economizamos 12 horas por semana com o SocialPost. A equipe toda usa e o resultado foi imediato.",
+    quote: "Economizamos 12 horas por semana com o Mib Social. A equipe toda usa e o resultado foi imediato.",
     name: "Mariana Costa",
     role: "Social Media Manager · Agência Plural",
     initials: "MC",
@@ -125,7 +125,7 @@ export default function LandingPage() {
                 <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
               </svg>
             </div>
-            <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.3px" }}>SocialPost</span>
+            <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.3px" }}>Mib Social</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Link href="/login" style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", textDecoration: "none", padding: "6px 12px" }}>Entrar</Link>
@@ -186,7 +186,7 @@ export default function LandingPage() {
             <span style={{ width: 10, height: 10, borderRadius: "50%", background: "rgba(239,68,68,0.5)" }} />
             <span style={{ width: 10, height: 10, borderRadius: "50%", background: "rgba(234,179,8,0.5)" }} />
             <span style={{ width: 10, height: 10, borderRadius: "50%", background: "rgba(34,197,94,0.5)" }} />
-            <span style={{ marginLeft: 8, fontSize: 11, color: "rgba(255,255,255,0.2)" }}>app.socialpost.com/dashboard</span>
+            <span style={{ marginLeft: 8, fontSize: 11, color: "rgba(255,255,255,0.2)" }}>social.mibtecno.com.br/dashboard</span>
           </div>
           <div style={{ borderRadius: 16, background: "linear-gradient(135deg, rgba(124,58,237,0.08) 0%, rgba(9,9,11,1) 60%, rgba(14,116,144,0.06) 100%)", padding: "32px 24px", display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
             {[
@@ -326,7 +326,7 @@ export default function LandingPage() {
               Pronto para crescer?
             </h2>
             <p style={{ fontSize: 16, color: "rgba(255,255,255,0.45)", maxWidth: 420, margin: "0 auto 36px" }}>
-              Junte-se a milhares de criadores e agências que dominam as redes com o SocialPost.
+              Junte-se a milhares de criadores e agências que dominam as redes com o Mib Social.
             </p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "center" }}>
               <Link href="/register" style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "white", color: "#111", textDecoration: "none", padding: "13px 28px", borderRadius: 12, fontWeight: 700, fontSize: 14, boxShadow: "0 8px 30px rgba(0,0,0,0.3)" }}>
@@ -350,12 +350,16 @@ export default function LandingPage() {
                 <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
               </svg>
             </div>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.7)" }}>SocialPost</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.7)" }}>Mib Social</span>
           </div>
-          <p style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", margin: 0 }}>© 2026 SocialPost. Todos os direitos reservados.</p>
+          <p style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", margin: 0 }}>© 2026 Mib Social — um produto mibtecno. Todos os direitos reservados.</p>
           <div style={{ display: "flex", gap: 20 }}>
-            {["Privacidade", "Termos", "Contato"].map((l) => (
-              <a key={l} href="#" style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", textDecoration: "none" }}>{l}</a>
+            {[
+              { label: "Privacidade", href: "https://mibtecno.com.br/privacidade" },
+              { label: "Termos", href: "https://mibtecno.com.br/termos" },
+              { label: "Contato", href: "https://mibtecno.com.br/contato" },
+            ].map((l) => (
+              <a key={l.label} href={l.href} style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", textDecoration: "none" }}>{l.label}</a>
             ))}
           </div>
         </div>

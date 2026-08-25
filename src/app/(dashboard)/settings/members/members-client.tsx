@@ -152,7 +152,7 @@ export function MembersClient({ workspaceId, isOwner, owner, initialMembers }: P
         <div className="rounded-xl border border-gray-200 bg-white">
           <div className="px-6 py-4 border-b border-gray-100">
             <h2 className="text-sm font-semibold text-gray-700">Adicionar membro</h2>
-            <p className="text-xs text-gray-400 mt-0.5">O usuário deve já ter uma conta no SocialPost.</p>
+            <p className="text-xs text-gray-400 mt-0.5">O usuário deve já ter uma conta no Mib Social.</p>
           </div>
           <div className="px-6 py-5">
             <form onSubmit={invite} className="space-y-4">

@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const alt = "SocialPost — Gerencie todas as suas redes sociais";
+export const alt = "Mib Social — Gerencie todas as suas redes sociais";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -61,7 +61,7 @@ export default function OGImage() {
             </svg>
           </div>
           <span style={{ fontSize: 38, fontWeight: 800, color: "white", letterSpacing: "-1px" }}>
-            SocialPost
+            Mib Social
           </span>
         </div>
 

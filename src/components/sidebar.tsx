@@ -60,7 +60,7 @@ export function Sidebar({ user, workspace, inboxUnread = 0 }: SidebarProps) {
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600">
           <Zap className="h-4 w-4 text-white" />
         </div>
-        <span className="text-lg font-bold text-gray-900">SocialPost</span>
+        <span className="text-lg font-bold text-gray-900">Mib Social</span>
       </div>
 
       {/* Workspace switcher */}

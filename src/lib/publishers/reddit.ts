@@ -24,7 +24,7 @@ export async function publishToReddit(
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/x-www-form-urlencoded",
-      "User-Agent": "SocialPost/1.0",
+      "User-Agent": "MibSocial/1.0",
     },
     body: form.toString(),
   });

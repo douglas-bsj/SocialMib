@@ -123,7 +123,7 @@ export function WorkspaceClient({ workspace }: Props) {
             <Label htmlFor="ws-slug">Slug</Label>
             <div className="mt-1 flex rounded-lg border border-gray-200 overflow-hidden focus-within:ring-2 focus-within:ring-violet-500">
               <span className="px-3 py-2 bg-gray-50 text-sm text-gray-400 border-r border-gray-200 whitespace-nowrap">
-                socialpost.app/
+                social.mibtecno.com.br/
               </span>
               <input
                 id="ws-slug"

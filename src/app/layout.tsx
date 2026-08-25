@@ -8,8 +8,8 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
-const BASE_URL = process.env.NEXTAUTH_URL ?? "https://socialpost.app";
-const TITLE = "SocialPost — Gerencie todas as suas redes sociais";
+const BASE_URL = process.env.NEXTAUTH_URL ?? "https://social.mibtecno.com.br";
+const TITLE = "Mib Social — Gerencie todas as suas redes sociais";
 const DESCRIPTION =
   "Agende posts, responda mensagens e analise resultados para Instagram, X, Facebook, LinkedIn, TikTok e mais — tudo em um único lugar.";
 
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
   title: {
     default: TITLE,
-    template: "%s | SocialPost",
+    template: "%s | Mib Social",
   },
   description: DESCRIPTION,
   keywords: [
@@ -29,9 +29,9 @@ export const metadata: Metadata = {
     "linkedin scheduler",
     "social media analytics",
   ],
-  authors: [{ name: "SocialPost" }],
-  creator: "SocialPost",
-  publisher: "SocialPost",
+  authors: [{ name: "mibtecno", url: "https://mibtecno.com.br" }],
+  creator: "mibtecno",
+  publisher: "mibtecno",
   robots: {
     index: true,
     follow: true,
@@ -41,7 +41,7 @@ export const metadata: Metadata = {
     type: "website",
     locale: "pt_BR",
     url: BASE_URL,
-    siteName: "SocialPost",
+    siteName: "Mib Social",
     title: TITLE,
     description: DESCRIPTION,
     images: [
@@ -49,7 +49,7 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "SocialPost — Gerencie todas as suas redes sociais",
+        alt: "Mib Social — Gerencie todas as suas redes sociais",
       },
     ],
   },

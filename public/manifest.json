@@ -1,7 +1,7 @@
 {
-  "name": "SocialPost",
-  "short_name": "SocialPost",
-  "description": "Gerencie todas as suas redes sociais em um só lugar",
+  "name": "Mib Social",
+  "short_name": "Mib Social",
+  "description": "Gerencie todas as suas redes sociais em um só lugar — mibtecno",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#09090b",
