@@ -54,8 +54,11 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
   },
 };
 
-export function getPlanConfig(plan: PlanKey): PlanConfig {
-  return PLANS[plan];
+// Todas as restrições de plano foram removidas: todo usuário tem acesso aos
+// recursos do plano mais alto (Agency), independente do valor salvo em
+// User.plan. Este campo permanece no schema só como histórico/informativo.
+export function getPlanConfig(_plan?: PlanKey): PlanConfig {
+  return PLANS.AGENCY;
 }
 
 export function getPlanFromPriceId(priceId: string): PlanKey | null {

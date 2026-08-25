@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
 import { openai, PLATFORM_TONE } from "@/lib/openai";
 import { rateLimit } from "@/lib/rate-limit";
 import { z } from "zod";
@@ -20,19 +19,6 @@ export async function POST(request: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
-  }
-
-  // Check plan — AI is PRO+
-  const user = await db.user.findUnique({
-    where: { id: session.user.id },
-    select: { plan: true },
-  });
-
-  if (user?.plan === "FREE") {
-    return NextResponse.json(
-      { error: "A geração com IA requer o plano Pro ou Agency. Faça upgrade nas Configurações." },
-      { status: 403 }
-    );
   }
 
   const body = await request.json().catch(() => ({}));

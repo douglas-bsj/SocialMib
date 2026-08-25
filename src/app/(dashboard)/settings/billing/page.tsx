@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { PLANS, type PlanKey } from "@/lib/plans";
+import { getPlanConfig } from "@/lib/plans";
 import { BillingClient } from "./billing-client";
 
 function startOfMonth() {
@@ -18,7 +18,6 @@ export default async function BillingPage() {
   const user = await db.user.findUnique({
     where: { id: session.user.id },
     select: {
-      plan: true,
       stripeCustomerId: true,
       stripeSubscriptionId: true,
       ownedWorkspaces: {
@@ -36,8 +35,9 @@ export default async function BillingPage() {
 
   if (!user) redirect("/login");
 
-  const plan = user.plan as PlanKey;
-  const planConfig = PLANS[plan];
+  // Restrições de plano removidas: todo usuário tem acesso aos recursos do
+  // plano mais alto, independente do que estiver salvo em user.plan.
+  const planConfig = getPlanConfig();
 
   // Aggregate usage across all owned workspaces
   const totalAccounts = user.ownedWorkspaces.reduce(
@@ -52,7 +52,6 @@ export default async function BillingPage() {
 
   return (
     <BillingClient
-      currentPlan={plan}
       planConfig={planConfig}
       hasSubscription={!!user.stripeCustomerId}
       usage={{
