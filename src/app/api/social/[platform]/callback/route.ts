@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getUserWorkspace } from "@/lib/workspace";
 import {
   exchangeCodeForToken,
   exchangeForLongLivedToken,
@@ -70,7 +71,7 @@ export async function GET(
     const profile = await fetchProfile(platformId, tokens.access_token);
 
     const [workspace, user] = await Promise.all([
-      db.workspace.findFirst({ where: { ownerId: session.user.id }, orderBy: { createdAt: "asc" } }),
+      getUserWorkspace(session.user.id),
       db.user.findUnique({ where: { id: session.user.id }, select: { plan: true } }),
     ]);
 

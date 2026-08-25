@@ -15,6 +15,7 @@ interface Props {
     logo: string | null;
     createdAt: string;
   };
+  isOwner: boolean;
 }
 
 function Toast({ type, message }: { type: "success" | "error"; message: string }) {
@@ -44,7 +45,7 @@ function Card({ title, description, children }: { title: string; description?: s
   );
 }
 
-export function WorkspaceClient({ workspace }: Props) {
+export function WorkspaceClient({ workspace, isOwner }: Props) {
   const router = useRouter();
 
   const [name, setName] = useState(workspace.name);
@@ -106,7 +107,10 @@ export function WorkspaceClient({ workspace }: Props) {
 
   return (
     <div className="space-y-6">
-      <Card title="Informações do workspace">
+      <Card
+        title="Informações do workspace"
+        description={isOwner ? undefined : "Apenas o dono do workspace pode editar essas informações."}
+      >
         <form onSubmit={saveWorkspace} className="space-y-4">
           {status && <Toast type={status.type} message={status.message} />}
           <div>
@@ -117,6 +121,7 @@ export function WorkspaceClient({ workspace }: Props) {
               onChange={(e) => handleNameChange(e.target.value)}
               className="mt-1"
               required
+              disabled={!isOwner}
             />
           </div>
           <div>
@@ -131,55 +136,60 @@ export function WorkspaceClient({ workspace }: Props) {
                 onChange={(e) =>
                   setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))
                 }
-                className="flex-1 px-3 py-2 text-sm outline-none bg-white"
+                className="flex-1 px-3 py-2 text-sm outline-none bg-white disabled:bg-gray-50 disabled:text-gray-400"
                 required
                 minLength={2}
                 maxLength={50}
                 pattern="[a-z0-9-]+"
+                disabled={!isOwner}
               />
             </div>
             <p className="mt-1 text-xs text-gray-400">Apenas letras minúsculas, números e hífens.</p>
           </div>
-          <div className="flex justify-end">
-            <Button type="submit" disabled={saving} className="bg-violet-600 hover:bg-violet-700 text-white">
-              {saving ? "Salvando..." : "Salvar alterações"}
-            </Button>
-          </div>
+          {isOwner && (
+            <div className="flex justify-end">
+              <Button type="submit" disabled={saving} className="bg-violet-600 hover:bg-violet-700 text-white">
+                {saving ? "Salvando..." : "Salvar alterações"}
+              </Button>
+            </div>
+          )}
         </form>
       </Card>
 
-      {/* Danger zone */}
-      <Card title="Zona de perigo" description="Ações irreversíveis para este workspace.">
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-3">
-          <div>
-            <p className="text-sm font-medium text-red-700">Deletar workspace</p>
-            <p className="text-xs text-red-500 mt-0.5">
-              Todos os posts, contas sociais e membros serão permanentemente removidos. Esta ação não pode ser desfeita.
-            </p>
+      {/* Danger zone — apenas o dono pode deletar o workspace */}
+      {isOwner && (
+        <Card title="Zona de perigo" description="Ações irreversíveis para este workspace.">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-3">
+            <div>
+              <p className="text-sm font-medium text-red-700">Deletar workspace</p>
+              <p className="text-xs text-red-500 mt-0.5">
+                Todos os posts, contas sociais e membros serão permanentemente removidos. Esta ação não pode ser desfeita.
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="delete-confirm" className="text-xs text-red-600">
+                Digite <strong>{workspace.name}</strong> para confirmar:
+              </Label>
+              <Input
+                id="delete-confirm"
+                value={deleteConfirm}
+                onChange={(e) => setDeleteConfirm(e.target.value)}
+                className="mt-1 border-red-200 focus-visible:ring-red-400"
+                placeholder={workspace.name}
+              />
+            </div>
+            <Button
+              variant="destructive"
+              disabled={deleteConfirm !== workspace.name || deleting}
+              onClick={deleteWorkspace}
+              className="gap-2"
+            >
+              <Trash2 className="h-4 w-4" />
+              {deleting ? "Deletando..." : "Deletar workspace"}
+            </Button>
           </div>
-          <div>
-            <Label htmlFor="delete-confirm" className="text-xs text-red-600">
-              Digite <strong>{workspace.name}</strong> para confirmar:
-            </Label>
-            <Input
-              id="delete-confirm"
-              value={deleteConfirm}
-              onChange={(e) => setDeleteConfirm(e.target.value)}
-              className="mt-1 border-red-200 focus-visible:ring-red-400"
-              placeholder={workspace.name}
-            />
-          </div>
-          <Button
-            variant="destructive"
-            disabled={deleteConfirm !== workspace.name || deleting}
-            onClick={deleteWorkspace}
-            className="gap-2"
-          >
-            <Trash2 className="h-4 w-4" />
-            {deleting ? "Deletando..." : "Deletar workspace"}
-          </Button>
-        </div>
-      </Card>
+        </Card>
+      )}
     </div>
   );
 }

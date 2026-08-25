@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getUserWorkspace } from "@/lib/workspace";
 import { AnalyticsClient } from "./analytics-client";
 
 function daysAgo(n: number) {
@@ -31,10 +32,7 @@ export default async function AnalyticsPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const workspace = await db.workspace.findFirst({
-    where: { ownerId: session.user.id },
-    orderBy: { createdAt: "asc" },
-  });
+  const workspace = await getUserWorkspace(session.user.id);
 
   if (!workspace) {
     return (

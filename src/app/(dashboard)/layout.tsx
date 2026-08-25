@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getUserWorkspace } from "@/lib/workspace";
 import { Sidebar } from "@/components/sidebar";
 
 export const metadata: Metadata = {
@@ -15,14 +16,11 @@ export default async function DashboardLayout({
 }) {
   const session = await auth();
 
-  if (!session?.user) {
+  if (!session?.user?.id) {
     redirect("/login");
   }
 
-  const workspace = await db.workspace.findFirst({
-    where: { ownerId: session.user.id },
-    orderBy: { createdAt: "asc" },
-  });
+  const workspace = await getUserWorkspace(session.user.id);
 
   const inboxUnread = workspace
     ? await db.inboxItem.count({

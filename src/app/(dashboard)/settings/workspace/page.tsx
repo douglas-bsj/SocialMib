@@ -1,16 +1,13 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { getUserWorkspace } from "@/lib/workspace";
 import { WorkspaceClient } from "./workspace-client";
 
 export default async function WorkspacePage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const workspace = await db.workspace.findFirst({
-    where: { ownerId: session.user.id },
-    orderBy: { createdAt: "asc" },
-  });
+  const workspace = await getUserWorkspace(session.user.id);
 
   if (!workspace) {
     return (
@@ -29,6 +26,7 @@ export default async function WorkspacePage() {
         logo: workspace.logo ?? null,
         createdAt: workspace.createdAt.toISOString(),
       }}
+      isOwner={workspace.ownerId === session.user.id}
     />
   );
 }

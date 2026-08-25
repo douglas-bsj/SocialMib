@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getUserWorkspace } from "@/lib/workspace";
 import { schedulePost } from "@/lib/queue";
 import { getPlanConfig } from "@/lib/plans";
 import type { PlanKey } from "@/lib/plans";
@@ -21,9 +22,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const workspace = await db.workspace.findFirst({
-    where: { ownerId: session.user.id },
-  });
+  const workspace = await getUserWorkspace(session.user.id);
   if (!workspace) {
     return NextResponse.json({ posts: [] });
   }
@@ -48,7 +47,7 @@ export async function POST(request: NextRequest) {
   }
 
   const [workspace, user] = await Promise.all([
-    db.workspace.findFirst({ where: { ownerId: session.user.id } }),
+    getUserWorkspace(session.user.id),
     db.user.findUnique({ where: { id: session.user.id }, select: { plan: true } }),
   ]);
   if (!workspace) {

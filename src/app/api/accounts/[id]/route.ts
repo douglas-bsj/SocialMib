@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getUserWorkspace } from "@/lib/workspace";
 
 async function getAccountWithAuth(userId: string, accountId: string) {
-  const workspace = await db.workspace.findFirst({
-    where: { ownerId: userId },
-  });
+  const workspace = await getUserWorkspace(userId);
   if (!workspace) return null;
 
   return db.socialAccount.findFirst({

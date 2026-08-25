@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { workspaceAccessWhere } from "@/lib/workspace";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +23,7 @@ export default async function DashboardPage() {
   if (!session?.user?.id) redirect("/login");
 
   const workspace = await db.workspace.findFirst({
-    where: { ownerId: session.user.id },
+    where: workspaceAccessWhere(session.user.id),
     include: {
       socialAccounts: true,
       posts: {

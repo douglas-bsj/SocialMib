@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { workspaceAccessWhere } from "@/lib/workspace";
 import { MembersClient } from "./members-client";
 
 export default async function MembersPage() {
@@ -8,7 +9,7 @@ export default async function MembersPage() {
   if (!session?.user?.id) redirect("/login");
 
   const workspace = await db.workspace.findFirst({
-    where: { ownerId: session.user.id },
+    where: workspaceAccessWhere(session.user.id),
     orderBy: { createdAt: "asc" },
     include: {
       members: {

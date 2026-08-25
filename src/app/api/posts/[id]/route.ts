@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getUserWorkspace } from "@/lib/workspace";
 import { schedulePost } from "@/lib/queue";
 
 async function getPost(userId: string, postId: string) {
-  const workspace = await db.workspace.findFirst({ where: { ownerId: userId } });
+  const workspace = await getUserWorkspace(userId);
   if (!workspace) return null;
   return db.post.findFirst({
     where: { id: postId, workspaceId: workspace.id },

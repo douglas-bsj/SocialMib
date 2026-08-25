@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-
-async function getWorkspace(userId: string) {
-  return db.workspace.findFirst({
-    where: { ownerId: userId },
-    orderBy: { createdAt: "asc" },
-  });
-}
+import { getUserWorkspace } from "@/lib/workspace";
 
 export async function GET() {
   const session = await auth();
@@ -15,7 +9,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const workspace = await getWorkspace(session.user.id);
+  const workspace = await getUserWorkspace(session.user.id);
   if (!workspace) {
     return NextResponse.json({ accounts: [] });
   }
@@ -34,7 +28,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const workspace = await getWorkspace(session.user.id);
+  const workspace = await getUserWorkspace(session.user.id);
   if (!workspace) {
     return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
   }
