@@ -13,7 +13,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense } from "react";
 
 const PLATFORMS = [
@@ -109,6 +109,12 @@ const PLATFORMS = [
   },
 ];
 
+interface PlatformStatus {
+  configured: boolean;
+  callbackUrl?: string;
+  envVars?: string[];
+}
+
 interface SocialAccount {
   id: string;
   platform: string;
@@ -134,6 +140,8 @@ const PLATFORM_ENUM_TO_ID: Record<string, string> = {
 
 function AccountsPageContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const [platformStatus, setPlatformStatus] = useState<Record<string, PlatformStatus>>({});
   const [accounts, setAccounts] = useState<SocialAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [connectOpen, setConnectOpen] = useState(false);
@@ -148,24 +156,41 @@ function AccountsPageContent() {
 
   useEffect(() => {
     fetchAccounts();
+    fetchPlatformStatus();
     const success = searchParams.get("success");
+    // searchParams.get() já devolve o valor decodificado — decodificar de novo
+    // quebrava a página (URIError) quando a mensagem tinha "%".
     const error = searchParams.get("error");
     if (success === "connected") {
       showNotification("success", "Conta conectada com sucesso!");
     } else if (error) {
-      showNotification("error", decodeURIComponent(error));
+      showNotification("error", error, 15000);
     }
+    if (success || error) router.replace("/accounts", { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function showNotification(type: "success" | "error", msg: string) {
+  function showNotification(type: "success" | "error", msg: string, duration = 5000) {
     setNotification({ type, msg });
-    setTimeout(() => setNotification(null), 5000);
+    setTimeout(() => setNotification(null), duration);
+  }
+
+  async function fetchPlatformStatus() {
+    try {
+      const res = await fetch("/api/social/status");
+      if (!res.ok) return;
+      const data = await res.json();
+      setPlatformStatus(data.platforms ?? {});
+    } catch {
+      // se falhar, os botões continuam habilitados e o servidor valida
+    }
   }
 
   async function fetchAccounts() {
     setLoading(true);
     try {
       const res = await fetch("/api/accounts");
+      if (!res.ok) throw new Error();
       const data = await res.json();
       setAccounts(data.accounts ?? []);
     } catch {
@@ -178,11 +203,15 @@ function AccountsPageContent() {
   async function toggleAccount(id: string, isActive: boolean) {
     setTogglingId(id);
     try {
-      await fetch(`/api/accounts/${id}`, {
+      const res = await fetch(`/api/accounts/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isActive: !isActive }),
       });
+      if (!res.ok) {
+        showNotification("error", "Não foi possível atualizar a conta.");
+        return;
+      }
       setAccounts((prev) => prev.map((a) => (a.id === id ? { ...a, isActive: !isActive } : a)));
     } finally {
       setTogglingId(null);
@@ -192,7 +221,11 @@ function AccountsPageContent() {
   async function deleteAccount(id: string) {
     setDeletingId(id);
     try {
-      await fetch(`/api/accounts/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/accounts/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        showNotification("error", "Não foi possível remover a conta.");
+        return;
+      }
       setAccounts((prev) => prev.filter((a) => a.id !== id));
       showNotification("success", "Conta removida.");
     } finally {
@@ -210,7 +243,7 @@ function AccountsPageContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ handle: blueskyHandle, appPassword: blueskyPass }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setBlueskyError(data.error ?? "Erro ao conectar.");
         return;
@@ -228,6 +261,16 @@ function AccountsPageContent() {
   }
 
   function handleConnect(platform: (typeof PLATFORMS)[0]) {
+    const status = platformStatus[platform.id];
+    if (status && !status.configured) {
+      showNotification(
+        "error",
+        `${platform.name} ainda não está configurado no servidor. Defina ${status.envVars?.join(" e ") ?? "as credenciais"} e reinicie o app.`,
+        15000
+      );
+      setConnectOpen(false);
+      return;
+    }
     if (platform.isSpecial) {
       setConnectOpen(false);
       setBlueskyOpen(true);
@@ -386,10 +429,18 @@ function AccountsPageContent() {
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             {PLATFORMS.map((platform) => {
               const isConnected = connectedPlatformIds.includes(platform.id);
+              const notConfigured = platformStatus[platform.id]?.configured === false;
               return (
                 <button
                   key={platform.id}
-                  disabled={isConnected}
+                  disabled={notConfigured}
+                  title={
+                    notConfigured
+                      ? `Configure ${platformStatus[platform.id]?.envVars?.join(" e ")} no servidor`
+                      : isConnected
+                        ? "Reconectar (renova o acesso da conta)"
+                        : undefined
+                  }
                   onClick={() => handleConnect(platform)}
                   className="flex items-start gap-3 rounded-xl border border-gray-200 p-4 text-left transition-all hover:border-violet-300 hover:bg-violet-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -401,8 +452,10 @@ function AccountsPageContent() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
                       <p className="font-medium text-gray-900 text-sm">{platform.name}</p>
-                      {isConnected ? (
-                        <Badge variant="success" className="text-xs shrink-0">Conectado</Badge>
+                      {notConfigured ? (
+                        <Badge variant="secondary" className="text-xs shrink-0">Não configurado</Badge>
+                      ) : isConnected ? (
+                        <Badge variant="success" className="text-xs shrink-0">Conectado · reconectar</Badge>
                       ) : platform.isSpecial ? (
                         <Badge variant="secondary" className="text-xs shrink-0">App Password</Badge>
                       ) : null}

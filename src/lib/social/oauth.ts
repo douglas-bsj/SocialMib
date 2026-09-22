@@ -1,6 +1,13 @@
 import crypto from "crypto";
-import { type NextRequest, NextResponse } from "next/server";
-import { type PlatformId, PLATFORM_CONFIGS, getCallbackUrl, getClientId, getClientSecret } from "./config";
+import { NextResponse } from "next/server";
+import {
+  type PlatformId,
+  PLATFORM_CONFIGS,
+  getBaseUrl,
+  getCallbackUrl,
+  getClientId,
+  getClientSecret,
+} from "./config";
 
 export function generateState(): string {
   return crypto.randomBytes(32).toString("hex");
@@ -24,7 +31,7 @@ export function buildAuthUrl(
   const callbackUrl = getCallbackUrl(platform);
 
   const params = new URLSearchParams({
-    client_id: clientId,
+    [config.clientIdParam ?? "client_id"]: clientId,
     redirect_uri: callbackUrl,
     response_type: "code",
     scope: config.scopes.join(config.scopeJoiner),
@@ -67,13 +74,14 @@ export async function exchangeCodeForToken(
   }
 
   if (!config.usesBasicAuth) {
-    body.set("client_id", clientId);
+    body.set(config.clientIdParam ?? "client_id", clientId);
     body.set("client_secret", clientSecret);
   }
 
   const headers: Record<string, string> = {
     "Content-Type": "application/x-www-form-urlencoded",
     "Accept": "application/json",
+    ...config.extraHeaders,
   };
 
   if (config.usesBasicAuth) {
@@ -87,12 +95,52 @@ export async function exchangeCodeForToken(
     body: body.toString(),
   });
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Token exchange failed for ${platform}: ${res.status} ${text}`);
+  const text = await res.text();
+  let data: Record<string, unknown> = {};
+  try {
+    data = JSON.parse(text);
+  } catch {
+    // resposta não-JSON: tratada abaixo
   }
 
-  return res.json();
+  if (!res.ok || data.error) {
+    throw new Error(
+      `${config.name}: falha ao trocar o código pelo token (${res.status}). ${describeApiError(data, text)}`
+    );
+  }
+
+  // Instagram (Login do Instagram) pode responder { data: [{ access_token, user_id }] }
+  const first = Array.isArray(data.data) ? (data.data[0] as Record<string, unknown>) : undefined;
+  // TikTok v2 pode aninhar em { data: { access_token } }
+  const nested =
+    data.data && !Array.isArray(data.data) && typeof data.data === "object"
+      ? (data.data as Record<string, unknown>)
+      : undefined;
+  const tokens = (data.access_token ? data : first ?? nested ?? data) as {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+    token_type?: string;
+  };
+
+  if (!tokens.access_token) {
+    throw new Error(`${config.name}: a resposta não trouxe access_token. ${describeApiError(data, text)}`);
+  }
+
+  return tokens as { access_token: string; refresh_token?: string; expires_in?: number; token_type?: string };
+}
+
+/** Extrai uma mensagem de erro legível das respostas das APIs sociais. */
+export function describeApiError(data: Record<string, unknown>, raw = ""): string {
+  const err = data.error as unknown;
+  const msg =
+    (typeof err === "object" && err && ((err as Record<string, unknown>).message as string)) ||
+    (data.error_description as string) ||
+    (data.error_message as string) ||
+    (data.message as string) ||
+    (typeof err === "string" ? err : "") ||
+    raw.slice(0, 200);
+  return String(msg ?? "").trim();
 }
 
 export async function fetchProfile(
@@ -102,19 +150,29 @@ export async function fetchProfile(
   const config = PLATFORM_CONFIGS[platform];
 
   const res = await fetch(config.profileUrl, {
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: { Authorization: `Bearer ${accessToken}`, ...config.extraHeaders },
   });
 
-  if (!res.ok) {
-    throw new Error(`Profile fetch failed for ${platform}: ${res.status}`);
+  const text = await res.text();
+  let data: Record<string, unknown> = {};
+  try {
+    data = JSON.parse(text);
+  } catch {
+    // ignora
   }
 
-  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(
+      `${config.name}: não foi possível ler o perfil (${res.status}). ${describeApiError(data, text)}`
+    );
+  }
+
   return parseProfile(platform, data);
 }
 
 function parseProfile(
   platform: PlatformId,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any
 ): { name: string; username?: string; image?: string } {
   switch (platform) {
@@ -127,8 +185,8 @@ function parseProfile(
 
     case "instagram":
       return {
-        name: data.name ?? data.username ?? "Instagram User",
-        username: data.username,
+        name: data.name || data.username || "Instagram User",
+        username: data.username ?? (data.user_id ? String(data.user_id) : data.id),
         image: data.profile_picture_url,
       };
 
@@ -218,9 +276,12 @@ export function setOAuthCookies(
   platform: PlatformId,
   codeVerifier?: string
 ) {
+  // "secure" segue o protocolo da URL pública. Com NODE_ENV=production servido por
+  // http (ex.: stack de teste em http://IP:porta) o navegador descartava os cookies
+  // e o callback sempre falhava com "invalid_state".
   const opts = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: getBaseUrl().startsWith("https://"),
     sameSite: "lax" as const,
     maxAge: 600,
     path: "/",

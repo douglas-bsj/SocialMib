@@ -8,7 +8,31 @@ import {
   fetchProfile,
   clearOAuthCookies,
 } from "@/lib/social/oauth";
-import { PLATFORM_CONFIGS, type PlatformId } from "@/lib/social/config";
+import { PLATFORM_CONFIGS, getBaseUrl, type PlatformId } from "@/lib/social/config";
+import type { Platform } from "@/generated/prisma/client";
+
+// Mensagens amigáveis para os códigos de erro mostrados em /accounts.
+const ERROR_MESSAGES: Record<string, string> = {
+  invalid_platform: "Plataforma inválida.",
+  no_code: "A plataforma não retornou o código de autorização. Tente conectar novamente.",
+  invalid_state:
+    "A sessão de conexão expirou ou foi perdida (cookies). Tente novamente — se persistir, confira se NEXTAUTH_URL é exatamente o endereço que você usa no navegador.",
+  platform_mismatch: "Conexão iniciada em outra plataforma. Tente novamente.",
+  no_workspace: "Nenhum workspace encontrado para o seu usuário.",
+  access_denied: "Você cancelou a autorização na plataforma.",
+};
+
+/** Redireciona para /accounts usando a URL pública (request.url pode ser 0.0.0.0:3000 no container). */
+function accountsRedirect(params: Record<string, string>) {
+  const qs = new URLSearchParams(params).toString();
+  const response = NextResponse.redirect(`${getBaseUrl()}/accounts?${qs}`);
+  clearOAuthCookies(response);
+  return response;
+}
+
+function errorRedirect(codeOrMessage: string) {
+  return accountsRedirect({ error: ERROR_MESSAGES[codeOrMessage] ?? codeOrMessage });
+}
 import { getPlanConfig } from "@/lib/plans";
 
 export async function GET(
@@ -17,13 +41,13 @@ export async function GET(
 ) {
   const session = await auth();
   if (!session?.user?.id) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.redirect(`${getBaseUrl()}/login?callbackUrl=/accounts`);
   }
 
   const { platform } = await params;
 
   if (!PLATFORM_CONFIGS[platform as PlatformId]) {
-    return NextResponse.redirect(new URL("/accounts?error=invalid_platform", request.url));
+    return errorRedirect("invalid_platform");
   }
 
   const platformId = platform as PlatformId;
@@ -34,12 +58,11 @@ export async function GET(
   const errorDescription = searchParams.get("error_description");
 
   if (error) {
-    const msg = encodeURIComponent(errorDescription ?? error);
-    return NextResponse.redirect(new URL(`/accounts?error=${msg}`, request.url));
+    return errorRedirect(ERROR_MESSAGES[error] ? error : (errorDescription ?? error));
   }
 
   if (!code) {
-    return NextResponse.redirect(new URL("/accounts?error=no_code", request.url));
+    return errorRedirect("no_code");
   }
 
   const storedState = request.cookies.get("oauth_state")?.value;
@@ -47,11 +70,11 @@ export async function GET(
   const codeVerifier = request.cookies.get("oauth_code_verifier")?.value;
 
   if (!storedState || storedState !== state) {
-    return NextResponse.redirect(new URL("/accounts?error=invalid_state", request.url));
+    return errorRedirect("invalid_state");
   }
 
   if (storedPlatform !== platformId) {
-    return NextResponse.redirect(new URL("/accounts?error=platform_mismatch", request.url));
+    return errorRedirect("platform_mismatch");
   }
 
   try {
@@ -76,7 +99,7 @@ export async function GET(
     ]);
 
     if (!workspace) {
-      return NextResponse.redirect(new URL("/accounts?error=no_workspace", request.url));
+      return errorRedirect("no_workspace");
     }
 
     // Enforce social account limit
@@ -84,12 +107,9 @@ export async function GET(
     if (isFinite(planConfig.socialAccountLimit)) {
       const currentCount = await db.socialAccount.count({ where: { workspaceId: workspace.id } });
       if (currentCount >= planConfig.socialAccountLimit) {
-        const msg = encodeURIComponent(
+        return errorRedirect(
           `Limite de ${planConfig.socialAccountLimit} contas no plano ${planConfig.name}. Faça upgrade para conectar mais.`
         );
-        const response = NextResponse.redirect(new URL(`/accounts?error=${msg}`, request.url));
-        clearOAuthCookies(response);
-        return response;
       }
     }
 
@@ -104,7 +124,7 @@ export async function GET(
       },
       create: {
         id: `${workspace.id}-${platformId}-${profile.username ?? profile.name}`,
-        platform: config.prismaEnum as any,
+        platform: config.prismaEnum as Platform,
         name: profile.name,
         username: profile.username,
         profileImage: profile.image,
@@ -124,18 +144,10 @@ export async function GET(
       },
     });
 
-    const response = NextResponse.redirect(new URL("/accounts?success=connected", request.url));
-    clearOAuthCookies(response);
-    return response;
+    return accountsRedirect({ success: "connected" });
   } catch (err) {
     console.error(`OAuth callback error for ${platformId}:`, err);
-    const msg = encodeURIComponent(
-      err instanceof Error ? err.message : "Erro ao conectar conta."
-    );
-    const response = NextResponse.redirect(
-      new URL(`/accounts?error=${msg}`, request.url)
-    );
-    clearOAuthCookies(response);
-    return response;
+    const msg = err instanceof Error ? err.message : "Erro ao conectar conta.";
+    return errorRedirect(msg.slice(0, 400));
   }
 }

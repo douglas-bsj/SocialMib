@@ -22,13 +22,24 @@ export interface PlatformConfig {
   usesBasicAuth: boolean;
   extraAuthParams?: Record<string, string>;
   extraTokenParams?: Record<string, string>;
+  /** Nome do parâmetro do client id (TikTok usa "client_key"). */
+  clientIdParam?: string;
+  /** Headers extras exigidos pela API (ex.: Reddit exige User-Agent). */
+  extraHeaders?: Record<string, string>;
+  /** Variáveis de ambiente necessárias (usadas nas mensagens de erro). */
+  envVars: [string, string];
 }
 
-const BASE_URL = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+/** URL pública da aplicação, sem barra no final. */
+export function getBaseUrl(): string {
+  const url = process.env.NEXTAUTH_URL ?? process.env.AUTH_URL ?? "http://localhost:3000";
+  return url.replace(/\/+$/, "");
+}
 
 export const PLATFORM_CONFIGS: Record<PlatformId, PlatformConfig> = {
   twitter: {
     id: "twitter",
+    envVars: ["TWITTER_CLIENT_ID", "TWITTER_CLIENT_SECRET"],
     name: "X (Twitter)",
     prismaEnum: "TWITTER",
     authUrl: "https://twitter.com/i/oauth2/authorize",
@@ -43,17 +54,18 @@ export const PLATFORM_CONFIGS: Record<PlatformId, PlatformConfig> = {
 
   instagram: {
     id: "instagram",
+    envVars: ["INSTAGRAM_CLIENT_ID", "INSTAGRAM_CLIENT_SECRET"],
     name: "Instagram",
     prismaEnum: "INSTAGRAM",
-    authUrl: "https://api.instagram.com/oauth/authorize",
+    // Instagram API com Login do Instagram (a antiga Basic Display API foi desligada em 12/2024)
+    authUrl: "https://www.instagram.com/oauth/authorize",
     tokenUrl: "https://api.instagram.com/oauth/access_token",
     profileUrl:
-      "https://graph.instagram.com/v21.0/me?fields=id,username,name,account_type,profile_picture_url",
+      "https://graph.instagram.com/v21.0/me?fields=user_id,username,name,account_type,profile_picture_url",
     scopes: [
-      "instagram_basic",
-      "instagram_content_publish",
-      "instagram_manage_comments",
-      "instagram_manage_insights",
+      "instagram_business_basic",
+      "instagram_business_content_publish",
+      "instagram_business_manage_comments",
     ],
     scopeJoiner: ",",
     usesPKCE: false,
@@ -62,16 +74,17 @@ export const PLATFORM_CONFIGS: Record<PlatformId, PlatformConfig> = {
 
   facebook: {
     id: "facebook",
+    envVars: ["FACEBOOK_CLIENT_ID", "FACEBOOK_CLIENT_SECRET"],
     name: "Facebook",
     prismaEnum: "FACEBOOK",
-    authUrl: "https://www.facebook.com/v19.0/dialog/oauth",
-    tokenUrl: "https://graph.facebook.com/v19.0/oauth/access_token",
-    profileUrl: "https://graph.facebook.com/me?fields=id,name,picture",
+    authUrl: "https://www.facebook.com/v21.0/dialog/oauth",
+    tokenUrl: "https://graph.facebook.com/v21.0/oauth/access_token",
+    profileUrl: "https://graph.facebook.com/v21.0/me?fields=id,name,picture",
+    // "publish_to_groups" foi descontinuado pela Meta e causava "Invalid Scopes".
     scopes: [
       "pages_show_list",
       "pages_read_engagement",
       "pages_manage_posts",
-      "publish_to_groups",
       "public_profile",
     ],
     scopeJoiner: ",",
@@ -82,6 +95,7 @@ export const PLATFORM_CONFIGS: Record<PlatformId, PlatformConfig> = {
 
   linkedin: {
     id: "linkedin",
+    envVars: ["LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET"],
     name: "LinkedIn",
     prismaEnum: "LINKEDIN",
     authUrl: "https://www.linkedin.com/oauth/v2/authorization",
@@ -95,6 +109,7 @@ export const PLATFORM_CONFIGS: Record<PlatformId, PlatformConfig> = {
 
   tiktok: {
     id: "tiktok",
+    envVars: ["TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET"],
     name: "TikTok",
     prismaEnum: "TIKTOK",
     authUrl: "https://www.tiktok.com/v2/auth/authorize/",
@@ -105,10 +120,12 @@ export const PLATFORM_CONFIGS: Record<PlatformId, PlatformConfig> = {
     usesPKCE: true,
     usesBasicAuth: false,
     extraAuthParams: { code_challenge_method: "S256" },
+    clientIdParam: "client_key",
   },
 
   youtube: {
     id: "youtube",
+    envVars: ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET"],
     name: "YouTube",
     prismaEnum: "YOUTUBE",
     authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
@@ -127,6 +144,7 @@ export const PLATFORM_CONFIGS: Record<PlatformId, PlatformConfig> = {
 
   pinterest: {
     id: "pinterest",
+    envVars: ["PINTEREST_APP_ID", "PINTEREST_APP_SECRET"],
     name: "Pinterest",
     prismaEnum: "PINTEREST",
     authUrl: "https://www.pinterest.com/oauth/",
@@ -140,6 +158,7 @@ export const PLATFORM_CONFIGS: Record<PlatformId, PlatformConfig> = {
 
   threads: {
     id: "threads",
+    envVars: ["THREADS_CLIENT_ID", "THREADS_CLIENT_SECRET"],
     name: "Threads",
     prismaEnum: "THREADS",
     authUrl: "https://threads.net/oauth/authorize",
@@ -159,6 +178,7 @@ export const PLATFORM_CONFIGS: Record<PlatformId, PlatformConfig> = {
 
   reddit: {
     id: "reddit",
+    envVars: ["REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET"],
     name: "Reddit",
     prismaEnum: "REDDIT",
     authUrl: "https://www.reddit.com/api/v1/authorize",
@@ -169,11 +189,12 @@ export const PLATFORM_CONFIGS: Record<PlatformId, PlatformConfig> = {
     usesPKCE: false,
     usesBasicAuth: true,
     extraAuthParams: { duration: "permanent" },
+    extraHeaders: { "User-Agent": "MibSocial/1.0" },
   },
 };
 
 export function getCallbackUrl(platform: PlatformId): string {
-  return `${BASE_URL}/api/social/${platform}/callback`;
+  return `${getBaseUrl()}/api/social/${platform}/callback`;
 }
 
 export function getClientId(platform: PlatformId): string {
@@ -204,4 +225,12 @@ export function getClientSecret(platform: PlatformId): string {
     reddit: process.env.REDDIT_CLIENT_SECRET ?? "",
   };
   return map[platform];
+}
+
+/** True quando client id e secret da plataforma estão configurados no ambiente. */
+export function isPlatformConfigured(platform: PlatformId): boolean {
+  const id = getClientId(platform).trim();
+  const secret = getClientSecret(platform).trim();
+  const placeholder = /^(placeholder|changeme|your[-_]|xxx|dummy)/i;
+  return !!id && !!secret && !placeholder.test(id) && !placeholder.test(secret);
 }
