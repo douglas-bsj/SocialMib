@@ -1,0 +1,790 @@
+From 475ba5872cacdc9dc67c7e9225c518558ef6aa31 Mon Sep 17 00:00:00 2001
+From: Felipe Ferreira <felipe.ferreira@autobembrasil.coop.br>
+Date: Tue, 22 Sep 2026 14:23:13 -0300
+Subject: [PATCH] =?UTF-8?q?fix:=20corrige=20fluxo=20de=20conex=C3=A3o=20de?=
+ =?UTF-8?q?=20contas=20sociais?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Cookies OAuth com 'secure' conforme o protocolo da URL pública (em http o
+  navegador descartava os cookies e o callback falhava com invalid_state)
+- Redirects usam NEXTAUTH_URL em vez de request.url (0.0.0.0:3000 no container)
+- Aviso claro quando a plataforma não tem client id/secret configurado
+- Novo endpoint /api/social/status e badge 'Não configurado' na tela de contas
+- Instagram migrado para a API com Login do Instagram (Basic Display desligada)
+- Facebook: remove escopo descontinuado publish_to_groups, Graph v21.0
+- TikTok usa client_key; Reddit envia User-Agent
+- Mensagens de erro legíveis das APIs; página não quebra com '%' no erro
+- Permite reconectar uma conta já conectada
+- Stack de teste repassa as variáveis OAuth para o container
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_016zy8aXk1nphiFXTTFnumUr
+---
+ deploy/stack.local-test.yml                   | 21 +++++
+ src/app/(dashboard)/accounts/page.tsx         | 73 ++++++++++++---
+ .../api/social/[platform]/callback/route.ts   | 62 +++++++------
+ .../api/social/[platform]/connect/route.ts    | 34 ++++---
+ src/app/api/social/status/route.ts            | 30 +++++++
+ src/lib/social/config.ts                      | 53 ++++++++---
+ src/lib/social/oauth.ts                       | 89 ++++++++++++++++---
+ 7 files changed, 290 insertions(+), 72 deletions(-)
+ create mode 100644 src/app/api/social/status/route.ts
+
+diff --git a/deploy/stack.local-test.yml b/deploy/stack.local-test.yml
+index 11d9e26..2c58967 100644
+--- a/deploy/stack.local-test.yml
++++ b/deploy/stack.local-test.yml
+@@ -55,6 +55,27 @@ services:
+       STRIPE_AGENCY_PRICE_ID: ${STRIPE_AGENCY_PRICE_ID:-price_dummy}
+       RESEND_API_KEY: ${RESEND_API_KEY:-re_dummy}
+       EMAIL_FROM: ${EMAIL_FROM:-noreply@socialpost.local}
++      # ── Credenciais OAuth das redes sociais ──
++      # Sem elas o botão "Conectar" da plataforma fica como "Não configurado".
++      # Callback a cadastrar em cada app: ${NEXTAUTH_URL}/api/social/<plataforma>/callback
++      TWITTER_CLIENT_ID: ${TWITTER_CLIENT_ID:-}
++      TWITTER_CLIENT_SECRET: ${TWITTER_CLIENT_SECRET:-}
++      INSTAGRAM_CLIENT_ID: ${INSTAGRAM_CLIENT_ID:-}
++      INSTAGRAM_CLIENT_SECRET: ${INSTAGRAM_CLIENT_SECRET:-}
++      FACEBOOK_CLIENT_ID: ${FACEBOOK_CLIENT_ID:-}
++      FACEBOOK_CLIENT_SECRET: ${FACEBOOK_CLIENT_SECRET:-}
++      LINKEDIN_CLIENT_ID: ${LINKEDIN_CLIENT_ID:-}
++      LINKEDIN_CLIENT_SECRET: ${LINKEDIN_CLIENT_SECRET:-}
++      TIKTOK_CLIENT_KEY: ${TIKTOK_CLIENT_KEY:-}
++      TIKTOK_CLIENT_SECRET: ${TIKTOK_CLIENT_SECRET:-}
++      YOUTUBE_CLIENT_ID: ${YOUTUBE_CLIENT_ID:-}
++      YOUTUBE_CLIENT_SECRET: ${YOUTUBE_CLIENT_SECRET:-}
++      PINTEREST_APP_ID: ${PINTEREST_APP_ID:-}
++      PINTEREST_APP_SECRET: ${PINTEREST_APP_SECRET:-}
++      THREADS_CLIENT_ID: ${THREADS_CLIENT_ID:-}
++      THREADS_CLIENT_SECRET: ${THREADS_CLIENT_SECRET:-}
++      REDDIT_CLIENT_ID: ${REDDIT_CLIENT_ID:-}
++      REDDIT_CLIENT_SECRET: ${REDDIT_CLIENT_SECRET:-}
+     depends_on:
+       db:
+         condition: service_healthy
+diff --git a/src/app/(dashboard)/accounts/page.tsx b/src/app/(dashboard)/accounts/page.tsx
+index 4d437ab..de02b35 100644
+--- a/src/app/(dashboard)/accounts/page.tsx
++++ b/src/app/(dashboard)/accounts/page.tsx
+@@ -13,7 +13,7 @@ import {
+ import {
+   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+ } from "@/components/ui/dialog";
+-import { useSearchParams } from "next/navigation";
++import { useSearchParams, useRouter } from "next/navigation";
+ import { Suspense } from "react";
+ 
+ const PLATFORMS = [
+@@ -109,6 +109,12 @@ const PLATFORMS = [
+   },
+ ];
+ 
++interface PlatformStatus {
++  configured: boolean;
++  callbackUrl?: string;
++  envVars?: string[];
++}
++
+ interface SocialAccount {
+   id: string;
+   platform: string;
+@@ -134,6 +140,8 @@ const PLATFORM_ENUM_TO_ID: Record<string, string> = {
+ 
+ function AccountsPageContent() {
+   const searchParams = useSearchParams();
++  const router = useRouter();
++  const [platformStatus, setPlatformStatus] = useState<Record<string, PlatformStatus>>({});
+   const [accounts, setAccounts] = useState<SocialAccount[]>([]);
+   const [loading, setLoading] = useState(true);
+   const [connectOpen, setConnectOpen] = useState(false);
+@@ -148,24 +156,41 @@ function AccountsPageContent() {
+ 
+   useEffect(() => {
+     fetchAccounts();
++    fetchPlatformStatus();
+     const success = searchParams.get("success");
++    // searchParams.get() já devolve o valor decodificado — decodificar de novo
++    // quebrava a página (URIError) quando a mensagem tinha "%".
+     const error = searchParams.get("error");
+     if (success === "connected") {
+       showNotification("success", "Conta conectada com sucesso!");
+     } else if (error) {
+-      showNotification("error", decodeURIComponent(error));
++      showNotification("error", error, 15000);
+     }
++    if (success || error) router.replace("/accounts", { scroll: false });
++    // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, []);
+ 
+-  function showNotification(type: "success" | "error", msg: string) {
++  function showNotification(type: "success" | "error", msg: string, duration = 5000) {
+     setNotification({ type, msg });
+-    setTimeout(() => setNotification(null), 5000);
++    setTimeout(() => setNotification(null), duration);
++  }
++
++  async function fetchPlatformStatus() {
++    try {
++      const res = await fetch("/api/social/status");
++      if (!res.ok) return;
++      const data = await res.json();
++      setPlatformStatus(data.platforms ?? {});
++    } catch {
++      // se falhar, os botões continuam habilitados e o servidor valida
++    }
+   }
+ 
+   async function fetchAccounts() {
+     setLoading(true);
+     try {
+       const res = await fetch("/api/accounts");
++      if (!res.ok) throw new Error();
+       const data = await res.json();
+       setAccounts(data.accounts ?? []);
+     } catch {
+@@ -178,11 +203,15 @@ function AccountsPageContent() {
+   async function toggleAccount(id: string, isActive: boolean) {
+     setTogglingId(id);
+     try {
+-      await fetch(`/api/accounts/${id}`, {
++      const res = await fetch(`/api/accounts/${id}`, {
+         method: "PATCH",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify({ isActive: !isActive }),
+       });
++      if (!res.ok) {
++        showNotification("error", "Não foi possível atualizar a conta.");
++        return;
++      }
+       setAccounts((prev) => prev.map((a) => (a.id === id ? { ...a, isActive: !isActive } : a)));
+     } finally {
+       setTogglingId(null);
+@@ -192,7 +221,11 @@ function AccountsPageContent() {
+   async function deleteAccount(id: string) {
+     setDeletingId(id);
+     try {
+-      await fetch(`/api/accounts/${id}`, { method: "DELETE" });
++      const res = await fetch(`/api/accounts/${id}`, { method: "DELETE" });
++      if (!res.ok) {
++        showNotification("error", "Não foi possível remover a conta.");
++        return;
++      }
+       setAccounts((prev) => prev.filter((a) => a.id !== id));
+       showNotification("success", "Conta removida.");
+     } finally {
+@@ -210,7 +243,7 @@ function AccountsPageContent() {
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify({ handle: blueskyHandle, appPassword: blueskyPass }),
+       });
+-      const data = await res.json();
++      const data = await res.json().catch(() => ({}));
+       if (!res.ok) {
+         setBlueskyError(data.error ?? "Erro ao conectar.");
+         return;
+@@ -228,6 +261,16 @@ function AccountsPageContent() {
+   }
+ 
+   function handleConnect(platform: (typeof PLATFORMS)[0]) {
++    const status = platformStatus[platform.id];
++    if (status && !status.configured) {
++      showNotification(
++        "error",
++        `${platform.name} ainda não está configurado no servidor. Defina ${status.envVars?.join(" e ") ?? "as credenciais"} e reinicie o app.`,
++        15000
++      );
++      setConnectOpen(false);
++      return;
++    }
+     if (platform.isSpecial) {
+       setConnectOpen(false);
+       setBlueskyOpen(true);
+@@ -386,10 +429,18 @@ function AccountsPageContent() {
+           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+             {PLATFORMS.map((platform) => {
+               const isConnected = connectedPlatformIds.includes(platform.id);
++              const notConfigured = platformStatus[platform.id]?.configured === false;
+               return (
+                 <button
+                   key={platform.id}
+-                  disabled={isConnected}
++                  disabled={notConfigured}
++                  title={
++                    notConfigured
++                      ? `Configure ${platformStatus[platform.id]?.envVars?.join(" e ")} no servidor`
++                      : isConnected
++                        ? "Reconectar (renova o acesso da conta)"
++                        : undefined
++                  }
+                   onClick={() => handleConnect(platform)}
+                   className="flex items-start gap-3 rounded-xl border border-gray-200 p-4 text-left transition-all hover:border-violet-300 hover:bg-violet-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                 >
+@@ -401,8 +452,10 @@ function AccountsPageContent() {
+                   <div className="flex-1 min-w-0">
+                     <div className="flex items-center justify-between gap-2">
+                       <p className="font-medium text-gray-900 text-sm">{platform.name}</p>
+-                      {isConnected ? (
+-                        <Badge variant="success" className="text-xs shrink-0">Conectado</Badge>
++                      {notConfigured ? (
++                        <Badge variant="secondary" className="text-xs shrink-0">Não configurado</Badge>
++                      ) : isConnected ? (
++                        <Badge variant="success" className="text-xs shrink-0">Conectado · reconectar</Badge>
+                       ) : platform.isSpecial ? (
+                         <Badge variant="secondary" className="text-xs shrink-0">App Password</Badge>
+                       ) : null}
+diff --git a/src/app/api/social/[platform]/callback/route.ts b/src/app/api/social/[platform]/callback/route.ts
+index 7cda9dd..b5f78f9 100644
+--- a/src/app/api/social/[platform]/callback/route.ts
++++ b/src/app/api/social/[platform]/callback/route.ts
+@@ -8,7 +8,31 @@ import {
+   fetchProfile,
+   clearOAuthCookies,
+ } from "@/lib/social/oauth";
+-import { PLATFORM_CONFIGS, type PlatformId } from "@/lib/social/config";
++import { PLATFORM_CONFIGS, getBaseUrl, type PlatformId } from "@/lib/social/config";
++import type { Platform } from "@/generated/prisma/client";
++
++// Mensagens amigáveis para os códigos de erro mostrados em /accounts.
++const ERROR_MESSAGES: Record<string, string> = {
++  invalid_platform: "Plataforma inválida.",
++  no_code: "A plataforma não retornou o código de autorização. Tente conectar novamente.",
++  invalid_state:
++    "A sessão de conexão expirou ou foi perdida (cookies). Tente novamente — se persistir, confira se NEXTAUTH_URL é exatamente o endereço que você usa no navegador.",
++  platform_mismatch: "Conexão iniciada em outra plataforma. Tente novamente.",
++  no_workspace: "Nenhum workspace encontrado para o seu usuário.",
++  access_denied: "Você cancelou a autorização na plataforma.",
++};
++
++/** Redireciona para /accounts usando a URL pública (request.url pode ser 0.0.0.0:3000 no container). */
++function accountsRedirect(params: Record<string, string>) {
++  const qs = new URLSearchParams(params).toString();
++  const response = NextResponse.redirect(`${getBaseUrl()}/accounts?${qs}`);
++  clearOAuthCookies(response);
++  return response;
++}
++
++function errorRedirect(codeOrMessage: string) {
++  return accountsRedirect({ error: ERROR_MESSAGES[codeOrMessage] ?? codeOrMessage });
++}
+ import { getPlanConfig } from "@/lib/plans";
+ 
+ export async function GET(
+@@ -17,13 +41,13 @@ export async function GET(
+ ) {
+   const session = await auth();
+   if (!session?.user?.id) {
+-    return NextResponse.redirect(new URL("/login", request.url));
++    return NextResponse.redirect(`${getBaseUrl()}/login?callbackUrl=/accounts`);
+   }
+ 
+   const { platform } = await params;
+ 
+   if (!PLATFORM_CONFIGS[platform as PlatformId]) {
+-    return NextResponse.redirect(new URL("/accounts?error=invalid_platform", request.url));
++    return errorRedirect("invalid_platform");
+   }
+ 
+   const platformId = platform as PlatformId;
+@@ -34,12 +58,11 @@ export async function GET(
+   const errorDescription = searchParams.get("error_description");
+ 
+   if (error) {
+-    const msg = encodeURIComponent(errorDescription ?? error);
+-    return NextResponse.redirect(new URL(`/accounts?error=${msg}`, request.url));
++    return errorRedirect(ERROR_MESSAGES[error] ? error : (errorDescription ?? error));
+   }
+ 
+   if (!code) {
+-    return NextResponse.redirect(new URL("/accounts?error=no_code", request.url));
++    return errorRedirect("no_code");
+   }
+ 
+   const storedState = request.cookies.get("oauth_state")?.value;
+@@ -47,11 +70,11 @@ export async function GET(
+   const codeVerifier = request.cookies.get("oauth_code_verifier")?.value;
+ 
+   if (!storedState || storedState !== state) {
+-    return NextResponse.redirect(new URL("/accounts?error=invalid_state", request.url));
++    return errorRedirect("invalid_state");
+   }
+ 
+   if (storedPlatform !== platformId) {
+-    return NextResponse.redirect(new URL("/accounts?error=platform_mismatch", request.url));
++    return errorRedirect("platform_mismatch");
+   }
+ 
+   try {
+@@ -76,7 +99,7 @@ export async function GET(
+     ]);
+ 
+     if (!workspace) {
+-      return NextResponse.redirect(new URL("/accounts?error=no_workspace", request.url));
++      return errorRedirect("no_workspace");
+     }
+ 
+     // Enforce social account limit
+@@ -84,12 +107,9 @@ export async function GET(
+     if (isFinite(planConfig.socialAccountLimit)) {
+       const currentCount = await db.socialAccount.count({ where: { workspaceId: workspace.id } });
+       if (currentCount >= planConfig.socialAccountLimit) {
+-        const msg = encodeURIComponent(
++        return errorRedirect(
+           `Limite de ${planConfig.socialAccountLimit} contas no plano ${planConfig.name}. Faça upgrade para conectar mais.`
+         );
+-        const response = NextResponse.redirect(new URL(`/accounts?error=${msg}`, request.url));
+-        clearOAuthCookies(response);
+-        return response;
+       }
+     }
+ 
+@@ -104,7 +124,7 @@ export async function GET(
+       },
+       create: {
+         id: `${workspace.id}-${platformId}-${profile.username ?? profile.name}`,
+-        platform: config.prismaEnum as any,
++        platform: config.prismaEnum as Platform,
+         name: profile.name,
+         username: profile.username,
+         profileImage: profile.image,
+@@ -124,18 +144,10 @@ export async function GET(
+       },
+     });
+ 
+-    const response = NextResponse.redirect(new URL("/accounts?success=connected", request.url));
+-    clearOAuthCookies(response);
+-    return response;
++    return accountsRedirect({ success: "connected" });
+   } catch (err) {
+     console.error(`OAuth callback error for ${platformId}:`, err);
+-    const msg = encodeURIComponent(
+-      err instanceof Error ? err.message : "Erro ao conectar conta."
+-    );
+-    const response = NextResponse.redirect(
+-      new URL(`/accounts?error=${msg}`, request.url)
+-    );
+-    clearOAuthCookies(response);
+-    return response;
++    const msg = err instanceof Error ? err.message : "Erro ao conectar conta.";
++    return errorRedirect(msg.slice(0, 400));
+   }
+ }
+diff --git a/src/app/api/social/[platform]/connect/route.ts b/src/app/api/social/[platform]/connect/route.ts
+index 2b54678..07a2d10 100644
+--- a/src/app/api/social/[platform]/connect/route.ts
++++ b/src/app/api/social/[platform]/connect/route.ts
+@@ -6,36 +6,48 @@ import {
+   buildAuthUrl,
+   setOAuthCookies,
+ } from "@/lib/social/oauth";
+-import { PLATFORM_CONFIGS, type PlatformId } from "@/lib/social/config";
++import {
++  PLATFORM_CONFIGS,
++  getBaseUrl,
++  isPlatformConfigured,
++  type PlatformId,
++} from "@/lib/social/config";
++
++function accountsRedirect(error: string) {
++  return NextResponse.redirect(`${getBaseUrl()}/accounts?error=${encodeURIComponent(error)}`);
++}
+ 
+ export async function GET(
+-  request: NextRequest,
++  _request: NextRequest,
+   { params }: { params: Promise<{ platform: string }> }
+ ) {
+   const session = await auth();
+   if (!session?.user?.id) {
+-    return NextResponse.redirect(new URL("/login", request.url));
++    return NextResponse.redirect(`${getBaseUrl()}/login?callbackUrl=/accounts`);
+   }
+ 
+   const { platform } = await params;
++  const config = PLATFORM_CONFIGS[platform as PlatformId];
+ 
+-  if (!PLATFORM_CONFIGS[platform as PlatformId]) {
+-    return NextResponse.json({ error: `Plataforma "${platform}" não suportada.` }, { status: 400 });
++  if (!config) {
++    return accountsRedirect(`Plataforma "${platform}" não suportada.`);
+   }
+ 
+   const platformId = platform as PlatformId;
+-  const config = PLATFORM_CONFIGS[platformId];
+-  const state = generateState();
+ 
+-  let codeVerifier: string | undefined;
+-  if (config.usesPKCE) {
+-    codeVerifier = generateCodeVerifier();
++  // Sem client id/secret o provedor mostra um erro genérico ("client_id inválido").
++  // Avisa aqui, com a variável exata que falta.
++  if (!isPlatformConfigured(platformId)) {
++    return accountsRedirect(
++      `${config.name} ainda não está configurado no servidor. Defina ${config.envVars.join(" e ")} nas variáveis de ambiente e reinicie o app.`
++    );
+   }
+ 
++  const state = generateState();
++  const codeVerifier = config.usesPKCE ? generateCodeVerifier() : undefined;
+   const authUrl = buildAuthUrl(platformId, state, codeVerifier);
+ 
+   const response = NextResponse.redirect(authUrl);
+   setOAuthCookies(response, state, platformId, codeVerifier);
+-
+   return response;
+ }
+diff --git a/src/app/api/social/status/route.ts b/src/app/api/social/status/route.ts
+new file mode 100644
+index 0000000..faf2f17
+--- /dev/null
++++ b/src/app/api/social/status/route.ts
+@@ -0,0 +1,30 @@
++import { NextResponse } from "next/server";
++import { auth } from "@/lib/auth";
++import {
++  PLATFORM_CONFIGS,
++  getCallbackUrl,
++  isPlatformConfigured,
++  type PlatformId,
++} from "@/lib/social/config";
++
++/** Quais plataformas OAuth têm credenciais configuradas no servidor (Bluesky sempre disponível). */
++export async function GET() {
++  const session = await auth();
++  if (!session?.user?.id) {
++    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++  }
++
++  const platforms: Record<string, { configured: boolean; callbackUrl?: string; envVars?: string[] }> = {
++    bluesky: { configured: true },
++  };
++
++  for (const id of Object.keys(PLATFORM_CONFIGS) as PlatformId[]) {
++    platforms[id] = {
++      configured: isPlatformConfigured(id),
++      callbackUrl: getCallbackUrl(id),
++      envVars: PLATFORM_CONFIGS[id].envVars,
++    };
++  }
++
++  return NextResponse.json({ platforms });
++}
+diff --git a/src/lib/social/config.ts b/src/lib/social/config.ts
+index 560ab63..4055d5c 100644
+--- a/src/lib/social/config.ts
++++ b/src/lib/social/config.ts
+@@ -22,13 +22,24 @@ export interface PlatformConfig {
+   usesBasicAuth: boolean;
+   extraAuthParams?: Record<string, string>;
+   extraTokenParams?: Record<string, string>;
++  /** Nome do parâmetro do client id (TikTok usa "client_key"). */
++  clientIdParam?: string;
++  /** Headers extras exigidos pela API (ex.: Reddit exige User-Agent). */
++  extraHeaders?: Record<string, string>;
++  /** Variáveis de ambiente necessárias (usadas nas mensagens de erro). */
++  envVars: [string, string];
+ }
+ 
+-const BASE_URL = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
++/** URL pública da aplicação, sem barra no final. */
++export function getBaseUrl(): string {
++  const url = process.env.NEXTAUTH_URL ?? process.env.AUTH_URL ?? "http://localhost:3000";
++  return url.replace(/\/+$/, "");
++}
+ 
+ export const PLATFORM_CONFIGS: Record<PlatformId, PlatformConfig> = {
+   twitter: {
+     id: "twitter",
++    envVars: ["TWITTER_CLIENT_ID", "TWITTER_CLIENT_SECRET"],
+     name: "X (Twitter)",
+     prismaEnum: "TWITTER",
+     authUrl: "https://twitter.com/i/oauth2/authorize",
+@@ -43,17 +54,18 @@ export const PLATFORM_CONFIGS: Record<PlatformId, PlatformConfig> = {
+ 
+   instagram: {
+     id: "instagram",
++    envVars: ["INSTAGRAM_CLIENT_ID", "INSTAGRAM_CLIENT_SECRET"],
+     name: "Instagram",
+     prismaEnum: "INSTAGRAM",
+-    authUrl: "https://api.instagram.com/oauth/authorize",
++    // Instagram API com Login do Instagram (a antiga Basic Display API foi desligada em 12/2024)
++    authUrl: "https://www.instagram.com/oauth/authorize",
+     tokenUrl: "https://api.instagram.com/oauth/access_token",
+     profileUrl:
+-      "https://graph.instagram.com/v21.0/me?fields=id,username,name,account_type,profile_picture_url",
++      "https://graph.instagram.com/v21.0/me?fields=user_id,username,name,account_type,profile_picture_url",
+     scopes: [
+-      "instagram_basic",
+-      "instagram_content_publish",
+-      "instagram_manage_comments",
+-      "instagram_manage_insights",
++      "instagram_business_basic",
++      "instagram_business_content_publish",
++      "instagram_business_manage_comments",
+     ],
+     scopeJoiner: ",",
+     usesPKCE: false,
+@@ -62,16 +74,17 @@ export const PLATFORM_CONFIGS: Record<PlatformId, PlatformConfig> = {
+ 
+   facebook: {
+     id: "facebook",
++    envVars: ["FACEBOOK_CLIENT_ID", "FACEBOOK_CLIENT_SECRET"],
+     name: "Facebook",
+     prismaEnum: "FACEBOOK",
+-    authUrl: "https://www.facebook.com/v19.0/dialog/oauth",
+-    tokenUrl: "https://graph.facebook.com/v19.0/oauth/access_token",
+-    profileUrl: "https://graph.facebook.com/me?fields=id,name,picture",
++    authUrl: "https://www.facebook.com/v21.0/dialog/oauth",
++    tokenUrl: "https://graph.facebook.com/v21.0/oauth/access_token",
++    profileUrl: "https://graph.facebook.com/v21.0/me?fields=id,name,picture",
++    // "publish_to_groups" foi descontinuado pela Meta e causava "Invalid Scopes".
+     scopes: [
+       "pages_show_list",
+       "pages_read_engagement",
+       "pages_manage_posts",
+-      "publish_to_groups",
+       "public_profile",
+     ],
+     scopeJoiner: ",",
+@@ -82,6 +95,7 @@ export const PLATFORM_CONFIGS: Record<PlatformId, PlatformConfig> = {
+ 
+   linkedin: {
+     id: "linkedin",
++    envVars: ["LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET"],
+     name: "LinkedIn",
+     prismaEnum: "LINKEDIN",
+     authUrl: "https://www.linkedin.com/oauth/v2/authorization",
+@@ -95,6 +109,7 @@ export const PLATFORM_CONFIGS: Record<PlatformId, PlatformConfig> = {
+ 
+   tiktok: {
+     id: "tiktok",
++    envVars: ["TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET"],
+     name: "TikTok",
+     prismaEnum: "TIKTOK",
+     authUrl: "https://www.tiktok.com/v2/auth/authorize/",
+@@ -105,10 +120,12 @@ export const PLATFORM_CONFIGS: Record<PlatformId, PlatformConfig> = {
+     usesPKCE: true,
+     usesBasicAuth: false,
+     extraAuthParams: { code_challenge_method: "S256" },
++    clientIdParam: "client_key",
+   },
+ 
+   youtube: {
+     id: "youtube",
++    envVars: ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET"],
+     name: "YouTube",
+     prismaEnum: "YOUTUBE",
+     authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+@@ -127,6 +144,7 @@ export const PLATFORM_CONFIGS: Record<PlatformId, PlatformConfig> = {
+ 
+   pinterest: {
+     id: "pinterest",
++    envVars: ["PINTEREST_APP_ID", "PINTEREST_APP_SECRET"],
+     name: "Pinterest",
+     prismaEnum: "PINTEREST",
+     authUrl: "https://www.pinterest.com/oauth/",
+@@ -140,6 +158,7 @@ export const PLATFORM_CONFIGS: Record<PlatformId, PlatformConfig> = {
+ 
+   threads: {
+     id: "threads",
++    envVars: ["THREADS_CLIENT_ID", "THREADS_CLIENT_SECRET"],
+     name: "Threads",
+     prismaEnum: "THREADS",
+     authUrl: "https://threads.net/oauth/authorize",
+@@ -159,6 +178,7 @@ export const PLATFORM_CONFIGS: Record<PlatformId, PlatformConfig> = {
+ 
+   reddit: {
+     id: "reddit",
++    envVars: ["REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET"],
+     name: "Reddit",
+     prismaEnum: "REDDIT",
+     authUrl: "https://www.reddit.com/api/v1/authorize",
+@@ -169,11 +189,12 @@ export const PLATFORM_CONFIGS: Record<PlatformId, PlatformConfig> = {
+     usesPKCE: false,
+     usesBasicAuth: true,
+     extraAuthParams: { duration: "permanent" },
++    extraHeaders: { "User-Agent": "MibSocial/1.0" },
+   },
+ };
+ 
+ export function getCallbackUrl(platform: PlatformId): string {
+-  return `${BASE_URL}/api/social/${platform}/callback`;
++  return `${getBaseUrl()}/api/social/${platform}/callback`;
+ }
+ 
+ export function getClientId(platform: PlatformId): string {
+@@ -205,3 +226,11 @@ export function getClientSecret(platform: PlatformId): string {
+   };
+   return map[platform];
+ }
++
++/** True quando client id e secret da plataforma estão configurados no ambiente. */
++export function isPlatformConfigured(platform: PlatformId): boolean {
++  const id = getClientId(platform).trim();
++  const secret = getClientSecret(platform).trim();
++  const placeholder = /^(placeholder|changeme|your[-_]|xxx|dummy)/i;
++  return !!id && !!secret && !placeholder.test(id) && !placeholder.test(secret);
++}
+diff --git a/src/lib/social/oauth.ts b/src/lib/social/oauth.ts
+index edbea24..d75ae32 100644
+--- a/src/lib/social/oauth.ts
++++ b/src/lib/social/oauth.ts
+@@ -1,6 +1,13 @@
+ import crypto from "crypto";
+-import { type NextRequest, NextResponse } from "next/server";
+-import { type PlatformId, PLATFORM_CONFIGS, getCallbackUrl, getClientId, getClientSecret } from "./config";
++import { NextResponse } from "next/server";
++import {
++  type PlatformId,
++  PLATFORM_CONFIGS,
++  getBaseUrl,
++  getCallbackUrl,
++  getClientId,
++  getClientSecret,
++} from "./config";
+ 
+ export function generateState(): string {
+   return crypto.randomBytes(32).toString("hex");
+@@ -24,7 +31,7 @@ export function buildAuthUrl(
+   const callbackUrl = getCallbackUrl(platform);
+ 
+   const params = new URLSearchParams({
+-    client_id: clientId,
++    [config.clientIdParam ?? "client_id"]: clientId,
+     redirect_uri: callbackUrl,
+     response_type: "code",
+     scope: config.scopes.join(config.scopeJoiner),
+@@ -67,13 +74,14 @@ export async function exchangeCodeForToken(
+   }
+ 
+   if (!config.usesBasicAuth) {
+-    body.set("client_id", clientId);
++    body.set(config.clientIdParam ?? "client_id", clientId);
+     body.set("client_secret", clientSecret);
+   }
+ 
+   const headers: Record<string, string> = {
+     "Content-Type": "application/x-www-form-urlencoded",
+     "Accept": "application/json",
++    ...config.extraHeaders,
+   };
+ 
+   if (config.usesBasicAuth) {
+@@ -87,12 +95,52 @@ export async function exchangeCodeForToken(
+     body: body.toString(),
+   });
+ 
+-  if (!res.ok) {
+-    const text = await res.text();
+-    throw new Error(`Token exchange failed for ${platform}: ${res.status} ${text}`);
++  const text = await res.text();
++  let data: Record<string, unknown> = {};
++  try {
++    data = JSON.parse(text);
++  } catch {
++    // resposta não-JSON: tratada abaixo
+   }
+ 
+-  return res.json();
++  if (!res.ok || data.error) {
++    throw new Error(
++      `${config.name}: falha ao trocar o código pelo token (${res.status}). ${describeApiError(data, text)}`
++    );
++  }
++
++  // Instagram (Login do Instagram) pode responder { data: [{ access_token, user_id }] }
++  const first = Array.isArray(data.data) ? (data.data[0] as Record<string, unknown>) : undefined;
++  // TikTok v2 pode aninhar em { data: { access_token } }
++  const nested =
++    data.data && !Array.isArray(data.data) && typeof data.data === "object"
++      ? (data.data as Record<string, unknown>)
++      : undefined;
++  const tokens = (data.access_token ? data : first ?? nested ?? data) as {
++    access_token?: string;
++    refresh_token?: string;
++    expires_in?: number;
++    token_type?: string;
++  };
++
++  if (!tokens.access_token) {
++    throw new Error(`${config.name}: a resposta não trouxe access_token. ${describeApiError(data, text)}`);
++  }
++
++  return tokens as { access_token: string; refresh_token?: string; expires_in?: number; token_type?: string };
++}
++
++/** Extrai uma mensagem de erro legível das respostas das APIs sociais. */
++export function describeApiError(data: Record<string, unknown>, raw = ""): string {
++  const err = data.error as unknown;
++  const msg =
++    (typeof err === "object" && err && ((err as Record<string, unknown>).message as string)) ||
++    (data.error_description as string) ||
++    (data.error_message as string) ||
++    (data.message as string) ||
++    (typeof err === "string" ? err : "") ||
++    raw.slice(0, 200);
++  return String(msg ?? "").trim();
+ }
+ 
+ export async function fetchProfile(
+@@ -102,19 +150,29 @@ export async function fetchProfile(
+   const config = PLATFORM_CONFIGS[platform];
+ 
+   const res = await fetch(config.profileUrl, {
+-    headers: { Authorization: `Bearer ${accessToken}` },
++    headers: { Authorization: `Bearer ${accessToken}`, ...config.extraHeaders },
+   });
+ 
++  const text = await res.text();
++  let data: Record<string, unknown> = {};
++  try {
++    data = JSON.parse(text);
++  } catch {
++    // ignora
++  }
++
+   if (!res.ok) {
+-    throw new Error(`Profile fetch failed for ${platform}: ${res.status}`);
++    throw new Error(
++      `${config.name}: não foi possível ler o perfil (${res.status}). ${describeApiError(data, text)}`
++    );
+   }
+ 
+-  const data = await res.json();
+   return parseProfile(platform, data);
+ }
+ 
+ function parseProfile(
+   platform: PlatformId,
++  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   data: any
+ ): { name: string; username?: string; image?: string } {
+   switch (platform) {
+@@ -127,8 +185,8 @@ function parseProfile(
+ 
+     case "instagram":
+       return {
+-        name: data.name ?? data.username ?? "Instagram User",
+-        username: data.username,
++        name: data.name || data.username || "Instagram User",
++        username: data.username ?? (data.user_id ? String(data.user_id) : data.id),
+         image: data.profile_picture_url,
+       };
+ 
+@@ -218,9 +276,12 @@ export function setOAuthCookies(
+   platform: PlatformId,
+   codeVerifier?: string
+ ) {
++  // "secure" segue o protocolo da URL pública. Com NODE_ENV=production servido por
++  // http (ex.: stack de teste em http://IP:porta) o navegador descartava os cookies
++  // e o callback sempre falhava com "invalid_state".
+   const opts = {
+     httpOnly: true,
+-    secure: process.env.NODE_ENV === "production",
++    secure: getBaseUrl().startsWith("https://"),
+     sameSite: "lax" as const,
+     maxAge: 600,
+     path: "/",
+-- 
+2.43.0
+
