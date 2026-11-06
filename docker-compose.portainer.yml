@@ -40,7 +40,7 @@ services:
     build:
       context: .
       target: app
-    image: socialpost-app:latest
+    image: mibsocial-app:latest
     restart: unless-stopped
     ports:
       - "8090:3000"
@@ -99,7 +99,7 @@ services:
     build:
       context: .
       target: worker
-    image: socialpost-worker:latest
+    image: mibsocial-worker:latest
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
@@ -118,7 +118,7 @@ services:
     build:
       context: .
       target: worker
-    image: socialpost-worker:latest
+    image: mibsocial-worker:latest
     restart: "no"
     command: ["node_modules/.bin/tsx", "scripts/create-admin.ts"]
     environment:
