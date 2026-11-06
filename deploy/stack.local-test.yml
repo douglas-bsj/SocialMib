@@ -49,12 +49,17 @@ services:
       AUTH_TRUST_HOST: ${AUTH_TRUST_HOST:-true}
       NODE_ENV: production
       OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-dummy}
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-sk_test_dummy}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-whsec_dummy}
-      STRIPE_PRO_PRICE_ID: ${STRIPE_PRO_PRICE_ID:-price_dummy}
-      STRIPE_AGENCY_PRICE_ID: ${STRIPE_AGENCY_PRICE_ID:-price_dummy}
       RESEND_API_KEY: ${RESEND_API_KEY:-re_dummy}
-      EMAIL_FROM: ${EMAIL_FROM:-noreply@socialpost.local}
+      # ── E-mail (recuperação de senha, convites) ──
+      # SMTP do e-mail da empresa. Ex. Microsoft 365: smtp.office365.com / 587
+      #                            Ex. Gmail:         smtp.gmail.com / 587 (senha de app)
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_SECURE: ${SMTP_SECURE:-}
+      # Remetente; vazio = usa o SMTP_USER. Ex.: "Mib Social <contato@empresa.com.br>"
+      EMAIL_FROM: ${EMAIL_FROM:-}
       # ── Credenciais OAuth das redes sociais ──
       # Sem elas o botão "Conectar" da plataforma fica como "Não configurado".
       # Callback a cadastrar em cada app: ${NEXTAUTH_URL}/api/social/<plataforma>/callback

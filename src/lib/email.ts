@@ -1,15 +1,75 @@
 import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+/**
+ * Envio de e-mails.
+ *
+ * Prioridade:
+ *  1. SMTP (e-mail da empresa: Microsoft 365, Gmail, etc.) — se SMTP_HOST estiver definido.
+ *  2. Resend — se RESEND_API_KEY for uma chave real.
+ * Sem nenhum dos dois, o envio falha com um erro claro (antes falhava em silêncio).
+ */
 
-const FROM = process.env.EMAIL_FROM ?? "Mib Social <noreply@social.mibtecno.com.br>";
+function isRealResendKey(key?: string) {
+  return !!key && key.startsWith("re_") && !/dummy|placeholder|build/i.test(key);
+}
+
+export function isEmailConfigured(): boolean {
+  return !!process.env.SMTP_HOST || isRealResendKey(process.env.RESEND_API_KEY);
+}
+
+function getFrom(): string {
+  const from = process.env.EMAIL_FROM?.trim();
+  if (from) return from;
+  if (process.env.SMTP_USER) return `Mib Social <${process.env.SMTP_USER}>`;
+  return "Mib Social <noreply@social.mibtecno.com.br>";
+}
+
+let _transport: nodemailer.Transporter | null = null;
+function getSmtpTransport() {
+  if (!_transport) {
+    const port = Number(process.env.SMTP_PORT ?? 587);
+    _transport = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port,
+      // 465 = SSL direto; 587 = STARTTLS. SMTP_SECURE força o valor se precisar.
+      secure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === "true" : port === 465,
+      auth: process.env.SMTP_USER
+        ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS ?? "" }
+        : undefined,
+    });
+  }
+  return _transport;
+}
+
+let _resend: Resend | null = null;
+
+async function sendMail({ to, subject, html }: { to: string; subject: string; html: string }) {
+  const from = getFrom();
+
+  if (process.env.SMTP_HOST) {
+    await getSmtpTransport().sendMail({ from, to, subject, html });
+    return;
+  }
+
+  if (isRealResendKey(process.env.RESEND_API_KEY)) {
+    _resend ??= new Resend(process.env.RESEND_API_KEY);
+    const { error } = await _resend.emails.send({ from, to, subject, html });
+    // O Resend devolve o erro em vez de lançar — antes isso era ignorado.
+    if (error) throw new Error(`Resend: ${error.message}`);
+    return;
+  }
+
+  throw new Error(
+    "Envio de e-mail não configurado. Defina SMTP_HOST/SMTP_USER/SMTP_PASS (ou RESEND_API_KEY) no servidor."
+  );
+}
 
 export async function sendPasswordResetEmail(email: string, name: string | null, token: string) {
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
   const link = `${baseUrl}/reset-password?token=${token}`;
 
-  return resend.emails.send({
-    from: FROM,
+  return sendMail({
     to: email,
     subject: "Redefinir sua senha — Mib Social",
     html: `
@@ -48,8 +108,7 @@ export async function sendWorkspaceInviteEmail(
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
   const link = `${baseUrl}/register`;
 
-  return resend.emails.send({
-    from: FROM,
+  return sendMail({
     to: email,
     subject: `${inviterName ?? "Alguém"} te convidou para o ${workspaceName} no Mib Social`,
     html: `
@@ -88,8 +147,7 @@ export async function sendNewMemberAccountEmail(
 ) {
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
 
-  return resend.emails.send({
-    from: FROM,
+  return sendMail({
     to: email,
     subject: `Sua conta no Mib Social foi criada — workspace ${workspaceName}`,
     html: `
@@ -125,8 +183,7 @@ export async function sendNewMemberAccountEmail(
 export async function sendWelcomeEmail(email: string, name: string | null) {
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
 
-  return resend.emails.send({
-    from: FROM,
+  return sendMail({
     to: email,
     subject: "Bem-vindo ao Mib Social! 🎉",
     html: `

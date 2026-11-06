@@ -150,9 +150,6 @@ export function Sidebar({ user, workspace, inboxUnread = 0 }: SidebarProps) {
             <DropdownMenuItem asChild>
               <Link href="/settings/profile">Perfil</Link>
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/settings/billing">Plano e faturamento</Link>
-            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-red-600 cursor-pointer"

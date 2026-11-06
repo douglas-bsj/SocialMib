@@ -6,7 +6,6 @@ export interface PlanConfig {
   socialAccountLimit: number;
   monthlyPostLimit: number;
   workspaceLimit: number;
-  stripePriceId?: string;
   features: string[];
   highlighted?: boolean;
 }
@@ -26,7 +25,6 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     socialAccountLimit: 10,
     monthlyPostLimit: Infinity,
     workspaceLimit: 5,
-    stripePriceId: process.env.STRIPE_PRO_PRICE_ID,
     highlighted: true,
     features: [
       "10 contas sociais",
@@ -42,7 +40,6 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     socialAccountLimit: Infinity,
     monthlyPostLimit: Infinity,
     workspaceLimit: Infinity,
-    stripePriceId: process.env.STRIPE_AGENCY_PRICE_ID,
     features: [
       "Contas ilimitadas",
       "Posts ilimitados",
@@ -59,11 +56,4 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
 // User.plan. Este campo permanece no schema só como histórico/informativo.
 export function getPlanConfig(_plan?: PlanKey): PlanConfig {
   return PLANS.AGENCY;
-}
-
-export function getPlanFromPriceId(priceId: string): PlanKey | null {
-  for (const [key, config] of Object.entries(PLANS) as [PlanKey, PlanConfig][]) {
-    if (config.stripePriceId === priceId) return key;
-  }
-  return null;
 }

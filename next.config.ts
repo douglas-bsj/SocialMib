@@ -27,6 +27,10 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "avatar.vercel.sh" },
     ],
   },
+  // A área de faturamento foi removida: links antigos vão para o perfil.
+  async redirects() {
+    return [{ source: "/settings/billing/:path*", destination: "/settings/profile", permanent: false }];
+  },
   async headers() {
     return [
       {

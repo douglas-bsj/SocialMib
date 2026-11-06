@@ -5,7 +5,15 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CheckCircle2, AlertCircle, Crown, Shield, User, Trash2, UserPlus } from "lucide-react";
+import { CheckCircle2, AlertCircle, Crown, Shield, User, Trash2, UserPlus, KeyRound, Eye, EyeOff, Wand2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 interface Member {
@@ -19,6 +27,9 @@ interface Member {
 
 interface Props {
   workspaceId: string;
+  currentUserId: string;
+  /** Dono ou Admin: pode redefinir a senha das outras pessoas do workspace. */
+  canResetPasswords: boolean;
   isOwner: boolean;
   owner: { id: string; name: string; email: string; image: string | null };
   initialMembers: Member[];
@@ -70,7 +81,33 @@ function RoleBadge({ role }: { role: "OWNER" | "ADMIN" | "MEMBER" }) {
   );
 }
 
-export function MembersClient({ workspaceId, isOwner, owner, initialMembers }: Props) {
+function generatePassword() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  const bytes = new Uint32Array(12);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => chars[b % chars.length]).join("");
+}
+
+function ResetPasswordButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="p-1.5 rounded-lg text-gray-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"
+      title="Redefinir senha"
+    >
+      <KeyRound className="h-4 w-4" />
+    </button>
+  );
+}
+
+export function MembersClient({
+  workspaceId,
+  currentUserId,
+  canResetPasswords,
+  isOwner,
+  owner,
+  initialMembers,
+}: Props) {
   const router = useRouter();
   const [members, setMembers] = useState<Member[]>(initialMembers);
 
@@ -83,6 +120,65 @@ export function MembersClient({ workspaceId, isOwner, owner, initialMembers }: P
 
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  const [resetTarget, setResetTarget] = useState<{ id: string; name: string; email: string } | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState("");
+  const [pageStatus, setPageStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  function openReset(target: { id: string; name: string; email: string }) {
+    setResetTarget(target);
+    setNewPassword("");
+    setConfirmPassword("");
+    setShowPassword(false);
+    setResetError("");
+  }
+
+  function fillGenerated() {
+    const pwd = generatePassword();
+    setNewPassword(pwd);
+    setConfirmPassword(pwd);
+    setShowPassword(true);
+  }
+
+  async function submitReset(e: React.FormEvent) {
+    e.preventDefault();
+    if (!resetTarget) return;
+    if (newPassword.length < 8) {
+      setResetError("A senha deve ter pelo menos 8 caracteres.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setResetError("As senhas não conferem.");
+      return;
+    }
+    setResetting(true);
+    setResetError("");
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/members/${resetTarget.id}/password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: newPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setResetError(data.error ?? "Não foi possível redefinir a senha.");
+        return;
+      }
+      setPageStatus({
+        type: "success",
+        message: `Senha de ${resetTarget.name || resetTarget.email} redefinida. Passe a nova senha para a pessoa por um canal seguro.`,
+      });
+      setResetTarget(null);
+    } catch {
+      setResetError("Erro de conexão. Tente novamente.");
+    } finally {
+      setResetting(false);
+    }
+  }
 
   async function invite(e: React.FormEvent) {
     e.preventDefault();
@@ -164,6 +260,8 @@ export function MembersClient({ workspaceId, isOwner, owner, initialMembers }: P
 
   return (
     <div className="space-y-6">
+      {pageStatus && <Toast type={pageStatus.type} message={pageStatus.message} />}
+
       {/* Invite */}
       {isOwner && (
         <div className="rounded-xl border border-gray-200 bg-white">
@@ -246,7 +344,12 @@ export function MembersClient({ workspaceId, isOwner, owner, initialMembers }: P
               <p className="text-sm font-medium text-gray-800 truncate">{owner.name || "Sem nome"}</p>
               <p className="text-xs text-gray-400 truncate">{owner.email}</p>
             </div>
-            <RoleBadge role="OWNER" />
+            <div className="flex items-center gap-2">
+              {canResetPasswords && owner.id !== currentUserId && (
+                <ResetPasswordButton onClick={() => openReset(owner)} />
+              )}
+              <RoleBadge role="OWNER" />
+            </div>
           </div>
 
           {/* Members */}
@@ -259,6 +362,9 @@ export function MembersClient({ workspaceId, isOwner, owner, initialMembers }: P
               </div>
               {isOwner ? (
                 <div className="flex items-center gap-2">
+                  {canResetPasswords && m.id !== currentUserId && (
+                    <ResetPasswordButton onClick={() => openReset(m)} />
+                  )}
                   <select
                     value={m.role}
                     onChange={(e) => updateRole(m.id, e.target.value as "ADMIN" | "MEMBER")}
@@ -278,7 +384,12 @@ export function MembersClient({ workspaceId, isOwner, owner, initialMembers }: P
                   </button>
                 </div>
               ) : (
-                <RoleBadge role={m.role} />
+                <div className="flex items-center gap-2">
+                  {canResetPasswords && m.id !== currentUserId && (
+                    <ResetPasswordButton onClick={() => openReset(m)} />
+                  )}
+                  <RoleBadge role={m.role} />
+                </div>
               )}
             </div>
           ))}
@@ -290,6 +401,81 @@ export function MembersClient({ workspaceId, isOwner, owner, initialMembers }: P
           )}
         </div>
       </div>
+
+      {/* Redefinir senha */}
+      <Dialog open={!!resetTarget} onOpenChange={(open) => !open && setResetTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Redefinir senha</DialogTitle>
+            <DialogDescription>
+              Defina uma nova senha para <strong>{resetTarget?.name || resetTarget?.email}</strong>. A senha
+              antiga deixa de funcionar na hora.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submitReset} className="space-y-4">
+            {resetError && (
+              <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                {resetError}
+              </div>
+            )}
+            <div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="new-password">Nova senha</Label>
+                <button
+                  type="button"
+                  onClick={fillGenerated}
+                  className="inline-flex items-center gap-1 text-xs text-violet-600 hover:text-violet-700"
+                >
+                  <Wand2 className="h-3 w-3" />
+                  Gerar senha
+                </button>
+              </div>
+              <div className="relative mt-1">
+                <Input
+                  id="new-password"
+                  type={showPassword ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  minLength={8}
+                  required
+                  autoComplete="new-password"
+                  className="pr-9"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  title={showPassword ? "Ocultar" : "Mostrar"}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-gray-400">Mínimo de 8 caracteres.</p>
+            </div>
+            <div>
+              <Label htmlFor="confirm-password">Confirmar nova senha</Label>
+              <Input
+                id="confirm-password"
+                type={showPassword ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                minLength={8}
+                required
+                autoComplete="new-password"
+                className="mt-1"
+              />
+            </div>
+            <DialogFooter className="gap-2">
+              <Button type="button" variant="outline" onClick={() => setResetTarget(null)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={resetting} className="bg-violet-600 hover:bg-violet-700 text-white">
+                {resetting ? "Salvando..." : "Salvar nova senha"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

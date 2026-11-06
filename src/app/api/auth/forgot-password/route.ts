@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { sendPasswordResetEmail } from "@/lib/email";
+import { sendPasswordResetEmail, isEmailConfigured } from "@/lib/email";
 import { rateLimit } from "@/lib/rate-limit";
 import crypto from "node:crypto";
 import { z } from "zod";
@@ -20,6 +20,17 @@ export async function POST(request: NextRequest) {
   }
 
   const { email } = parsed.data;
+
+  // Sem envio de e-mail configurado o link nunca chegaria: avisa em vez de fingir que enviou.
+  if (!isEmailConfigured()) {
+    return NextResponse.json(
+      {
+        error:
+          "A recuperação por e-mail ainda não está ativada neste servidor. Peça ao dono ou a um admin do workspace para redefinir sua senha.",
+      },
+      { status: 503 }
+    );
+  }
 
   // Always respond OK to avoid user enumeration
   const user = await db.user.findUnique({ where: { email } });

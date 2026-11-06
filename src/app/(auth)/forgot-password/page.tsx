@@ -45,7 +45,7 @@ export default function ForgotPasswordPage() {
         </div>
         <h1 className="text-xl font-bold text-gray-900">Verifique seu e-mail</h1>
         <p className="mt-2 text-sm text-gray-500">
-          Se uma conta com <strong>{email}</strong> existir, você receberá um link para redefinir sua senha em breve.
+          Se uma conta com <strong>{email}</strong> existir, você receberá um link para redefinir sua senha em breve. O link vale por 1 hora — confira também a caixa de spam.
         </p>
         <Link href="/login" className="mt-6 block">
           <Button variant="outline" className="w-full gap-2">
@@ -91,6 +91,11 @@ export default function ForgotPasswordPage() {
           {loading ? "Enviando..." : "Enviar link de redefinição"}
         </Button>
       </form>
+
+      <p className="mt-4 text-center text-xs text-gray-400">
+        Não recebeu o e-mail? Confira a caixa de spam ou peça ao dono ou a um admin do workspace
+        para redefinir sua senha em Configurações → Membros.
+      </p>
 
       <p className="mt-4 text-center text-sm text-gray-500">
         Lembrou da senha?{" "}

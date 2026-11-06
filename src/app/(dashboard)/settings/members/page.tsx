@@ -37,10 +37,18 @@ export default async function MembersPage() {
     joinedAt: m.createdAt.toISOString(),
   }));
 
+  const userId = session.user.id;
+  const isOwner = workspace.ownerId === userId;
+  const myRole = isOwner
+    ? "OWNER"
+    : workspace.members.find((m) => m.userId === userId)?.role ?? "MEMBER";
+
   return (
     <MembersClient
       workspaceId={workspace.id}
-      isOwner={workspace.ownerId === session.user.id}
+      currentUserId={userId}
+      canResetPasswords={myRole === "OWNER" || myRole === "ADMIN"}
+      isOwner={isOwner}
       owner={{
         id: workspace.owner.id,
         name: workspace.owner.name ?? "",

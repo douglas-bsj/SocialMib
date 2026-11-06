@@ -21,7 +21,6 @@ RUN npx prisma generate
 # instantiate SDK clients at import time (Resend/Stripe/OpenAI throw on missing keys).
 # These are BUILD-ONLY; real values come from the container env at runtime.
 ENV RESEND_API_KEY=re_build_dummy \
-    STRIPE_SECRET_KEY=sk_test_build_dummy \
     OPENAI_API_KEY=sk-build-dummy \
     AUTH_SECRET=build_dummy_secret_change_me \
     DATABASE_URL=postgresql://build:build@localhost:5432/build \
