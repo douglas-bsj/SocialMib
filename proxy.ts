@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { decode } from "next-auth/jwt";
 
-const PROTECTED = ["/dashboard", "/accounts", "/publish", "/schedule", "/inbox", "/analytics", "/settings"];
+const PROTECTED = ["/dashboard", "/accounts", "/publish", "/schedule", "/inbox", "/analytics", "/settings", "/ajuda"];
 const AUTH_ONLY = ["/login", "/register"];
 
 export async function proxy(request: NextRequest) {

@@ -32,7 +32,7 @@ const PLATFORMS = [
     bg: "bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400",
     text: "text-white",
     icon: "📸",
-    desc: "Publique fotos e reels. Requer conta Business ou Creator.",
+    desc: "Publique fotos e reels. Requer conta Profissional (Criador ou Empresa) — é grátis.",
     isSpecial: false,
   },
   {
@@ -41,7 +41,7 @@ const PLATFORMS = [
     bg: "bg-blue-600",
     text: "text-white",
     icon: "f",
-    desc: "Poste em Páginas do Facebook. Requer permissão de admin.",
+    desc: "Poste em Páginas do Facebook (não em perfil pessoal). Requer ser admin da Página.",
     isSpecial: false,
   },
   {
@@ -307,7 +307,10 @@ function AccountsPageContent() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Contas de Redes Sociais</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Conecte suas contas para publicar e agendar posts
+            Conecte suas contas para publicar e agendar posts.{" "}
+            <a href="/ajuda" className="text-violet-600 hover:text-violet-700 underline">
+              Veja o que cada rede exige
+            </a>
           </p>
         </div>
         <Button onClick={() => setConnectOpen(true)} className="gap-2">
@@ -423,7 +426,10 @@ function AccountsPageContent() {
           <DialogHeader>
             <DialogTitle>Conectar Conta</DialogTitle>
             <DialogDescription>
-              Escolha a plataforma que deseja conectar ao seu workspace
+              Escolha a plataforma que deseja conectar ao seu workspace.{" "}
+              <a href="/ajuda" className="font-medium text-violet-600 hover:text-violet-700 underline">
+                Como preparar minha conta?
+              </a>
             </DialogDescription>
           </DialogHeader>
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">

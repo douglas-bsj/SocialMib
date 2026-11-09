@@ -13,6 +13,7 @@ import {
   Zap,
   LogOut,
   MessageCircle,
+  HelpCircle,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,7 @@ const navItems = [
   { href: "/schedule", icon: Calendar, label: "Agendamentos" },
   { href: "/inbox", icon: MessageCircle, label: "Inbox" },
   { href: "/analytics", icon: BarChart2, label: "Analytics" },
+  { href: "/ajuda", icon: HelpCircle, label: "Ajuda" },
 ];
 
 interface SidebarProps {
