@@ -24,10 +24,21 @@ function LoginForm() {
     setLoading(true);
     setError("");
 
-    const result = await signIn("credentials", { email, password, redirect: false });
+    let result;
+    try {
+      result = await signIn("credentials", { email: email.trim(), password, redirect: false });
+    } catch {
+      setError("Não foi possível falar com o servidor. Verifique sua conexão e tente novamente.");
+      setLoading(false);
+      return;
+    }
 
     if (result?.error) {
-      setError("Email ou senha incorretos.");
+      setError(
+        result.error === "CredentialsSignin"
+          ? "E-mail ou senha incorretos. Se esqueceu a senha, peça ao dono ou a um admin para redefinir em Configurações → Membros."
+          : "O servidor teve um problema ao entrar. Tente novamente em instantes."
+      );
       setLoading(false);
       return;
     }
@@ -45,7 +56,7 @@ function LoginForm() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <Label htmlFor="email">Email</Label>
-          <Input id="email" type="email" placeholder="voce@empresa.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="mt-1" />
+          <Input id="email" type="email" autoComplete="email" autoCapitalize="none" placeholder="voce@empresa.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="mt-1" />
         </div>
         <div>
           <div className="flex items-center justify-between">

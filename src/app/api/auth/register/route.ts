@@ -7,7 +7,7 @@ import { z } from "zod";
 
 const registerSchema = z.object({
   name: z.string().min(2),
-  email: z.string().email(),
+  email: z.string().trim().toLowerCase().email(),
   password: z.string().min(8),
 });
 
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { name, email, password } = registerSchema.parse(body);
 
-    const existing = await db.user.findUnique({ where: { email } });
+    const existing = await db.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } } });
     if (existing) {
       return NextResponse.json(
         { error: "Este email já está cadastrado." },

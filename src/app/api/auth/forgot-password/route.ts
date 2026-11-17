@@ -6,7 +6,7 @@ import crypto from "node:crypto";
 import { z } from "zod";
 
 const schema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().toLowerCase().email(),
 });
 
 export async function POST(request: NextRequest) {
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Always respond OK to avoid user enumeration
-  const user = await db.user.findUnique({ where: { email } });
+  const user = await db.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } } });
   if (!user || !user.password) {
     return NextResponse.json({ ok: true });
   }

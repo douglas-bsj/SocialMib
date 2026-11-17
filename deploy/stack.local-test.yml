@@ -1,5 +1,5 @@
-# SocialPost — Stack de TESTE INTERNO (LAN) para o servidor local 192.168.50.242
-# Enxuta: sem nginx/certbot/Cloudflare. Acesso via http://192.168.50.242:8090
+# SocialPost — Stack de TESTE INTERNO (LAN) para o servidor local
+# Enxuta: sem nginx/certbot/Cloudflare. Acesso via http://<IP-DO-SERVIDOR>:8090
 # Imagens buildadas localmente e carregadas via API do Portainer (image:, sem build-context).
 # Segredos vêm do Env da stack no Portainer (nunca versionar valores reais aqui).
 
@@ -118,6 +118,11 @@ services:
     command: ["node_modules/.bin/tsx", "scripts/create-admin.ts"]
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      # Senha usada só ao CRIAR o admin. Para recuperar o acesso, defina
+      # ADMIN_RESET_PASSWORD=true, reimplante uma vez e depois apague.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_RESET_PASSWORD: ${ADMIN_RESET_PASSWORD:-false}
       NODE_ENV: production
     depends_on:
       db:

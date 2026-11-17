@@ -41,7 +41,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 }
 
 const inviteSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().toLowerCase().email(),
   role: z.enum(["ADMIN", "MEMBER"]).default("MEMBER"),
   name: z.string().trim().min(2).optional(),
 });
@@ -64,11 +64,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const { email, role, name } = parsed.data;
 
-  if (email === session.user.email) {
+  if (email === session.user.email?.toLowerCase()) {
     return NextResponse.json({ error: "Você já é o dono do workspace." }, { status: 400 });
   }
 
-  let invitedUser = await db.user.findUnique({ where: { email } });
+  let invitedUser = await db.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } } });
   let tempPassword: string | null = null;
   let createdAccount = false;
 

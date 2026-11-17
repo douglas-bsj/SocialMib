@@ -5,7 +5,7 @@ import { z } from "zod";
 
 const schema = z.object({
   name: z.string().min(1).max(100),
-  email: z.string().email(),
+  email: z.string().trim().toLowerCase().email(),
 });
 
 export async function PATCH(request: NextRequest) {
@@ -18,8 +18,8 @@ export async function PATCH(request: NextRequest) {
 
   const { name, email } = parsed.data;
 
-  if (email !== session.user.email) {
-    const existing = await db.user.findUnique({ where: { email } });
+  if (email !== session.user.email?.toLowerCase()) {
+    const existing = await db.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } } });
     if (existing && existing.id !== session.user.id) {
       return NextResponse.json({ error: "Este email já está em uso." }, { status: 409 });
     }

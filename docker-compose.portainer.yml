@@ -1,4 +1,4 @@
-# Mib Social — Stack para o Portainer via REPOSITÓRIO GIT (servidor 192.168.50.242)
+# Mib Social — Stack para o Portainer via REPOSITÓRIO GIT
 # O Portainer clona o repositório e gera as imagens (build) no próprio servidor.
 # Deploy: Stacks → Add stack → Repository → Compose path: docker-compose.portainer.yml
 # Atualizar: na stack, "Pull and redeploy" (marque "Re-pull image and redeploy" / rebuild).
@@ -40,7 +40,7 @@ services:
     build:
       context: .
       target: app
-    image: mibsocial-app:v4
+    image: mibsocial-app:v5
     restart: unless-stopped
     ports:
       - "8090:3000"
@@ -104,7 +104,7 @@ services:
     build:
       context: .
       target: worker
-    image: mibsocial-worker:v4
+    image: mibsocial-worker:v5
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
@@ -123,11 +123,16 @@ services:
     build:
       context: .
       target: worker
-    image: mibsocial-worker:v4
+    image: mibsocial-worker:v5
     restart: "no"
     command: ["node_modules/.bin/tsx", "scripts/create-admin.ts"]
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      # Senha usada só ao CRIAR o admin. Para recuperar o acesso, defina
+      # ADMIN_RESET_PASSWORD=true, reimplante uma vez e depois apague.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_RESET_PASSWORD: ${ADMIN_RESET_PASSWORD:-false}
       NODE_ENV: production
     depends_on:
       db:
