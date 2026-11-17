@@ -60,12 +60,19 @@ const worker = new Worker(
       return;
     }
 
+    // Em um reenvio, não publica de novo nas contas onde já deu certo.
+    const targets = post.socialAccounts.filter((psa) => psa.status !== "PUBLISHED");
+    if (targets.length === 0) {
+      await prisma.post.update({ where: { id: postId }, data: { status: "PUBLISHED" } });
+      return;
+    }
+
     console.log(
-      `Publicando post ${postId} em ${post.socialAccounts.length} conta(s)...`
+      `Publicando post ${postId} em ${targets.length} conta(s)...`
     );
 
     const results = await Promise.allSettled(
-      post.socialAccounts.map(async (psa) => {
+      targets.map(async (psa) => {
         const { socialAccount } = psa;
         const variation = post.variations.find((v) => v.platform === socialAccount.platform);
         const content = variation?.content ?? post.content;
@@ -126,15 +133,11 @@ const worker = new Worker(
 
     // Notify the workspace owner in real-time
     const ownerId = post.workspace.ownerId;
-    const platforms = post.socialAccounts
-      .filter((_, i) => results[i]?.status === (anySucceeded ? "fulfilled" : "rejected"))
-      .map((psa) => psa.socialAccount.platform);
-
     await publishNotification(ownerId, {
       type: finalStatus === "PUBLISHED" ? "post_published" : "post_failed",
       postId,
       content: post.content,
-      platforms: post.socialAccounts.map((psa) => psa.socialAccount.platform),
+      platforms: targets.map((psa) => psa.socialAccount.platform),
       at: new Date().toISOString(),
     });
 

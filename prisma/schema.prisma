@@ -27,6 +27,7 @@ model User {
   workspaces           WorkspaceMember[]
   ownedWorkspaces      Workspace[]
   passwordResetTokens  PasswordResetToken[]
+  apiKeys              ApiKey[]
 
   @@map("users")
 }
@@ -87,6 +88,7 @@ model Workspace {
   socialAccounts SocialAccount[]
   posts          Post[]
   inboxItems     InboxItem[]
+  apiKeys        ApiKey[]
 
   @@map("workspaces")
 }
@@ -245,4 +247,23 @@ model InboxItem {
 
   @@unique([platform, externalId])
   @@map("inbox_items")
+}
+
+/// Chave de acesso para IAs/agentes (MCP). Guardamos só o hash; a chave aparece uma única vez.
+model ApiKey {
+  id          String    @id @default(cuid())
+  name        String
+  prefix      String
+  keyHash     String    @unique
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("api_keys")
 }

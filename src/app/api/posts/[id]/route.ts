@@ -1,80 +1,70 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
 import { getUserWorkspace } from "@/lib/workspace";
-import { schedulePost } from "@/lib/queue";
+import { getPost, updatePost, deletePost, PostError } from "@/lib/posts";
 
-async function getPost(userId: string, postId: string) {
+type Params = { params: Promise<{ id: string }> };
+
+async function workspaceIdFor(userId: string) {
   const workspace = await getUserWorkspace(userId);
-  if (!workspace) return null;
-  return db.post.findFirst({
-    where: { id: postId, workspaceId: workspace.id },
-    include: {
-      socialAccounts: { include: { socialAccount: true } },
-      variations: true,
-    },
-  });
+  return workspace?.id ?? null;
 }
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+function errorResponse(error: unknown) {
+  if (error instanceof PostError) {
+    return NextResponse.json({ error: error.message }, { status: error.status });
+  }
+  console.error("Post route error:", error);
+  return NextResponse.json({ error: "Erro interno." }, { status: 500 });
+}
+
+export async function GET(_request: NextRequest, { params }: Params) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const post = await getPost(session.user.id, id);
+  const workspaceId = await workspaceIdFor(session.user.id);
+  const post = workspaceId ? await getPost(workspaceId, id) : null;
   if (!post) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   return NextResponse.json({ post });
 }
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: Params) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const post = await getPost(session.user.id, id);
-  if (!post) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const workspaceId = await workspaceIdFor(session.user.id);
+  if (!workspaceId) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const body = await request.json();
-  const newStatus = body.status ?? post.status;
-
-  const updated = await db.post.update({
-    where: { id },
-    data: {
-      content: body.content ?? post.content,
-      scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : post.scheduledAt,
-      status: newStatus,
-      images: body.images ?? post.images,
-    },
-  });
-
-  // Re-enqueue when retrying a failed post
-  if (body.retry && newStatus === "PENDING") {
-    schedulePost(id, new Date()).catch((err) =>
-      console.error("Failed to re-enqueue post:", err)
-    );
+  const body = await request.json().catch(() => ({}));
+  try {
+    const post = await updatePost(workspaceId, id, {
+      content: typeof body.content === "string" ? body.content : undefined,
+      status: ["DRAFT", "PENDING", "SCHEDULED"].includes(body.status) ? body.status : undefined,
+      scheduledAt: body.scheduledAt === undefined ? undefined : body.scheduledAt,
+      images: Array.isArray(body.images) ? body.images : undefined,
+      retry: body.retry === true,
+    });
+    return NextResponse.json({ post });
+  } catch (error) {
+    return errorResponse(error);
   }
-
-  return NextResponse.json({ post: updated });
 }
 
-export async function DELETE(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function DELETE(_request: NextRequest, { params }: Params) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const post = await getPost(session.user.id, id);
-  if (!post) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const workspaceId = await workspaceIdFor(session.user.id);
+  if (!workspaceId) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  await db.post.delete({ where: { id } });
-  return NextResponse.json({ success: true });
+  try {
+    await deletePost(workspaceId, id);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return errorResponse(error);
+  }
 }
