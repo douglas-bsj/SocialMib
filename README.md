@@ -90,22 +90,44 @@ Pré-requisitos: Node 22+ e Docker.
 - Segredos e variáveis ficam só no Env da stack no Portainer, nunca neste repositório.
 - Migrações rodam sozinhas no start do container `app` (`prisma migrate deploy`).
 
-## Publicar na internet pela Cloudflare (procedimento)
+## Acesso pela internet (Cloudflare)
 
-Segue o padrão `EXPOSICAO-PUBLICA-SERVIDOR-LOCAL.md` (pasta `C:\Projetos de IA`): um proxy Caddy
-compartilhado (`autobem-public-proxy`, porta 2053) roteia por hostname; não é preciso mexer
-no roteador.
+O app está publicado em **https://social.mibtecno.com.br**. Caminho de uma requisição:
 
-1. Bloco no Caddyfile do proxy para `social.mibtecno.com.br:2053`, com certificado por DNS-01
-   (`{env.CF_API_TOKEN_MIBTECNO}`) e `reverse_proxy socialpost-app-1:3000`. No bloco, repassar
-   o IP real do visitante (`header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}`)
-   para o limite de tentativas por IP do app não tratar todos como o IP da Cloudflare.
-2. Conectar o proxy à rede `socialpost_default` (externa) no compose do proxy.
-3. DNS na zona `mibtecno.com.br`: `social` → IP público do servidor, **proxied**.
-4. Origin Rule para o hostname reescrevendo a porta de destino para **2053**.
-5. Na stack `socialpost`, definir `NEXTAUTH_URL=https://social.mibtecno.com.br`.
-6. Recomendado: regra de rate limit na Cloudflare para `/api/auth/callback/credentials`
-   (o login em si não limita tentativas).
+```
+visitante → Cloudflare (HTTPS, zona mibtecno.com.br) → IP público do servidor, porta 2053
+          → proxy Caddy compartilhado `autobem-public-proxy` → container `socialpost-app-1:3000`
+```
+
+Peças que fazem isso funcionar (todas já criadas):
+
+| Peça | Onde | Detalhe |
+|------|------|---------|
+| DNS | Cloudflare, zona `mibtecno.com.br` | registro `social` (A, **proxied**) |
+| Origin Rule | Cloudflare, zona `mibtecno.com.br` | host `social.mibtecno.com.br` → porta de origem **2053** |
+| Bloco do Caddy | stack `autobem-public-proxy` (Portainer) | certificado Let's Encrypt por DNS-01 com `CF_API_TOKEN_MIBTECNO`; `reverse_proxy socialpost-app-1:3000`; repassa `CF-Connecting-IP` como IP do visitante, para o limite por IP do app não tratar todos como o IP da Cloudflare |
+| Rede | stack `autobem-public-proxy` | rede externa `socialpost_default` conectada ao proxy |
+| `NEXTAUTH_URL` | Env da stack `socialpost` | `https://social.mibtecno.com.br` (links de e-mail e callbacks OAuth) |
+
+Padrão geral para publicar outros apps: `EXPOSICAO-PUBLICA-SERVIDOR-LOCAL.md` (pasta
+`C:\Projetos de IA`).
+
+### Manutenção (para quem assumir)
+
+- **Certificados:** o Caddy renova sozinho, mas depende do token da Cloudflare da zona
+  (`CF_API_TOKEN_MIBTECNO`, Env da stack do proxy; token `caddy-dns01-mibtecno`, **sem
+  expiração**, só na zona `mibtecno.com.br`, com DNS Write, Zone Read e Origin Write). Se uma
+  renovação falhar, o log do container `autobem_public_proxy` mostra `will retry`: confira se o
+  token ainda é válido. Em 2026 o token anterior expirou em 31/08 e os certificados de origem
+  venceram sem ninguém perceber, porque a Cloudflare aceita certificado de origem vencido no
+  modo SSL atual.
+- **Cuidado ao reiniciar o proxy:** a stack `autobem-public-proxy` serve vários sistemas. Um
+  processo em execução continua servindo um certificado vencido que já esteja na memória, mas
+  **depois de um reinício** o site cujo certificado esteja vencido (e cujo token não consiga
+  renovar) passa a responder **HTTP 525**. Antes de reiniciar, confirme que todos os tokens
+  usados pelo Caddyfile são válidos.
+- **Falta (recomendado):** regra de limite de tentativas na Cloudflare para
+  `POST /api/auth/callback/credentials` (o login do app não limita tentativas).
 
 ## Cuidados conhecidos
 
