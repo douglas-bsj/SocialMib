@@ -106,7 +106,8 @@ export async function sendWorkspaceInviteEmail(
   workspaceName: string,
 ) {
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
-  const link = `${baseUrl}/register`;
+  // Só é enviado para quem já tem conta (quem não tem recebe o e-mail de conta criada).
+  const link = `${baseUrl}/login`;
 
   return sendMail({
     to: email,
@@ -128,10 +129,10 @@ export async function sendWorkspaceInviteEmail(
       <strong>${inviterName ?? "Alguém"}</strong> te convidou para colaborar no workspace <strong>${workspaceName}</strong> no Mib Social.
     </p>
     <a href="${link}" style="display:inline-block;background:#7c3aed;color:#fff;font-weight:600;font-size:15px;padding:12px 28px;border-radius:10px;text-decoration:none;margin-bottom:24px;">
-      Aceitar convite
+      Entrar no Mib Social
     </a>
     <p style="color:#9ca3af;font-size:13px;line-height:1.6;margin:0;">
-      Se você não tem uma conta, será necessário criar uma primeiro.
+      Use o seu e-mail de sempre para entrar — o workspace já aparece na sua conta.
     </p>
   </div>
 </body>

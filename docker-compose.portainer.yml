@@ -54,6 +54,9 @@ services:
       NEXTAUTH_URL: ${NEXTAUTH_URL}
       # NextAuth v5 rejeita hosts não-padrão (acesso por IP:porta) sem isto → UntrustedHost/500.
       AUTH_TRUST_HOST: ${AUTH_TRUST_HOST:-true}
+      # Cadastro público (/register). Fechado por padrão: só dono/admin criam contas em
+      # Configurações → Membros. Defina "true" no Env da stack para reabrir.
+      ALLOW_PUBLIC_REGISTER: ${ALLOW_PUBLIC_REGISTER:-false}
       NODE_ENV: production
       OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-dummy}
       RESEND_API_KEY: ${RESEND_API_KEY:-re_dummy}

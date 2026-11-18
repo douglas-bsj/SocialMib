@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { sendWelcomeEmail } from "@/lib/email";
 import { rateLimit } from "@/lib/rate-limit";
+import { isPublicRegistrationOpen } from "@/lib/registration";
 import { z } from "zod";
 
 const registerSchema = z.object({
@@ -12,6 +13,13 @@ const registerSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  if (!isPublicRegistrationOpen()) {
+    return NextResponse.json(
+      { error: "O cadastro público está desativado. Peça ao dono ou a um admin para criar sua conta." },
+      { status: 403 }
+    );
+  }
+
   const limited = await rateLimit(request, { limit: 10, window: 60, prefix: "rl:register" });
   if (limited) return limited;
 
