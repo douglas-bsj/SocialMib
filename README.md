@@ -28,11 +28,34 @@ BullMQ + Redis (worker de publicação) · SMTP (e-mails) · OpenAI (geração d
 |------|----------|-------|
 | Twitter/X, LinkedIn, Threads, Instagram, Facebook | sim | sim |
 | Bluesky, Reddit, Pinterest | sim | — |
-| TikTok, YouTube | **não** — falta envio de vídeo (`src/lib/publishers/index.ts`) | — |
+| TikTok | sim — vídeo ou fotos (ver abaixo) | — |
+| YouTube | **não** — falta envio de vídeo (`src/lib/publishers/index.ts`) | — |
 
 Instagram exige imagem em todo post. Bluesky não usa OAuth: conecta com o handle e uma
 *app password* criada no próprio Bluesky. As demais só ficam conectáveis depois que as chaves
 OAuth delas estiverem no Env da stack (veja [Variáveis de ambiente](#variáveis-de-ambiente)).
+
+**Vídeo:** o upload aceita MP4/MOV/WebM até 95 MB (limite de 100 MB da Cloudflare). Um post com
+vídeo leva só o vídeo e, por enquanto, só pode ir para o TikTok — as outras redes recusam vídeo
+com mensagem clara.
+
+### TikTok
+
+- Código: `src/lib/publishers/tiktok.ts` (publicação), `src/lib/social/tiktok.ts` (API, token),
+  `src/lib/tiktok-options.ts` (opções do post, guardadas em `Post.platformOptions.tiktok`).
+- **Vídeo** vai por `FILE_UPLOAD`: o worker baixa o vídeo e envia em partes ao TikTok.
+- **Fotos** (JPG/WebP) vão por `PULL_FROM_URL`: o TikTok baixa do nosso site, o que exige
+  **verificar o domínio** (`social.mibtecno.com.br`) em TikTok Developers → app → URL properties.
+- **Token:** o access token dura poucas horas; o worker e a tela renovam com o refresh token
+  (cada renovação troca o refresh token). Por isso o worker também recebe `TIKTOK_CLIENT_KEY` e
+  `TIKTOK_CLIENT_SECRET`.
+- **Regras do TikTok na tela** (exigidas para a auditoria): mostrar a conta (creator_info),
+  privacidade escolhida manualmente sem padrão, Comentário/Dueto/Costura desligados por padrão,
+  aviso de Confirmação de Uso de Música.
+- **App não auditado:** só publica em contas TikTok **privadas** e o post sai como "Só eu"
+  (até 5 usuários por dia). Para posts públicos, pedir a auditoria em
+  <https://developers.tiktok.com/application/content-posting-api>.
+- Limite do TikTok: cerca de 15 posts por dia por conta.
 
 ## Contas de usuário e cadastro público
 
@@ -91,7 +114,7 @@ Pré-requisitos: Node 22+ e Docker.
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_RESET_PASSWORD` | Criação/recuperação do primeiro admin |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE`, `EMAIL_FROM` | E-mails (recuperação de senha, convites) |
 | `OPENAI_API_KEY` | Geração de texto por IA (opcional) |
-| `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_REGION`, `S3_PUBLIC_URL` | Guardar imagens num storage S3 (opcional; sem isso vão para o volume `uploads` — ver Cuidados) |
+| `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_REGION`, `S3_PUBLIC_URL` | Guardar imagens e vídeos num storage S3 (opcional; sem isso vão para o volume `uploads` — ver Cuidados) |
 | `UPLOAD_DIR` | Pasta dos uploads locais (padrão `public/uploads`; na stack, `/app/uploads`) |
 | `<REDE>_CLIENT_ID` / `_CLIENT_SECRET` | OAuth de cada rede (Twitter, Instagram, Facebook, LinkedIn, TikTok, YouTube, Pinterest, Threads, Reddit). Callback a cadastrar: `${NEXTAUTH_URL}/api/social/<rede>/callback` |
 

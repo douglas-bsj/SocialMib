@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getUserWorkspace } from "@/lib/workspace";
 import { getPost, updatePost, deletePost, PostError } from "@/lib/posts";
+import { parsePlatformOptions } from "@/lib/tiktok-options";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -45,6 +46,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       status: ["DRAFT", "PENDING", "SCHEDULED"].includes(body.status) ? body.status : undefined,
       scheduledAt: body.scheduledAt === undefined ? undefined : body.scheduledAt,
       images: Array.isArray(body.images) ? body.images : undefined,
+      platformOptions:
+        body.platformOptions && typeof body.platformOptions === "object"
+          ? parsePlatformOptions(body.platformOptions)
+          : undefined,
       retry: body.retry === true,
     });
     return NextResponse.json({ post });

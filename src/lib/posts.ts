@@ -1,6 +1,8 @@
 import { db } from "./db";
 import { schedulePost, cancelScheduledPost } from "./queue";
-import type { Platform, PostStatus } from "@/generated/prisma/client";
+import type { Platform, PostStatus, Prisma } from "@/generated/prisma/client";
+import { isVideoUrl } from "./storage-constants";
+import { parsePlatformOptions, type PlatformOptions } from "./tiktok-options";
 
 /**
  * Regras de posts compartilhadas entre o site (rotas /api/posts) e a integração
@@ -22,6 +24,44 @@ export interface CreatePostInput {
   images?: string[];
   /** Texto específico por rede, ex.: { INSTAGRAM: "..." } */
   variations?: Record<string, string>;
+  /** Opções por rede, ex.: { tiktok: { privacyLevel: "SELF_ONLY" } } */
+  platformOptions?: PlatformOptions;
+}
+
+/**
+ * Regras de mídia e de TikTok. Rascunhos podem ficar incompletos; o resto é
+ * conferido aqui para o erro aparecer na hora de salvar, não só ao publicar.
+ */
+function validateMediaAndOptions(
+  status: PostStatus,
+  platforms: string[],
+  images: string[],
+  options: PlatformOptions
+) {
+  const videos = images.filter(isVideoUrl);
+  if (videos.length > 0 && images.length > 1) {
+    throw new PostError("Um post com vídeo não pode ter outras imagens ou vídeos.");
+  }
+  if (status === "DRAFT" || !platforms.includes("TIKTOK")) return;
+
+  if (images.length === 0) {
+    throw new PostError("O TikTok exige um vídeo ou fotos no post.");
+  }
+  if (!options.tiktok?.privacyLevel) {
+    throw new PostError("Escolha quem pode ver o post no TikTok (privacidade).");
+  }
+  if (videos.length > 0) {
+    const others = platforms.filter((p) => p !== "TIKTOK");
+    if (others.length > 0) {
+      throw new PostError(
+        `Vídeo, por enquanto, só é publicado no TikTok. Desmarque: ${[...new Set(others)].join(", ")}.`
+      );
+    }
+  }
+}
+
+function toJson(options: PlatformOptions | undefined): Prisma.InputJsonValue | undefined {
+  return options ? (JSON.parse(JSON.stringify(options)) as Prisma.InputJsonValue) : undefined;
 }
 
 const postInclude = {
@@ -56,11 +96,14 @@ export async function createPost(workspaceId: string, input: CreatePostInput) {
 
   const accounts = await db.socialAccount.findMany({
     where: { id: { in: input.accountIds }, workspaceId },
-    select: { id: true },
+    select: { id: true, platform: true },
   });
   if (accounts.length !== new Set(input.accountIds).size) {
     throw new PostError("Uma ou mais contas não foram encontradas neste workspace.");
   }
+
+  const options = parsePlatformOptions(input.platformOptions);
+  validateMediaAndOptions(input.status, accounts.map((a) => a.platform), input.images ?? [], options);
 
   const post = await db.post.create({
     data: {
@@ -69,6 +112,7 @@ export async function createPost(workspaceId: string, input: CreatePostInput) {
       scheduledAt,
       workspaceId,
       images: input.images ?? [],
+      platformOptions: toJson(options),
       socialAccounts: {
         create: [...new Set(input.accountIds)].map((socialAccountId) => ({
           socialAccountId,
@@ -99,6 +143,7 @@ export interface UpdatePostInput {
   status?: "DRAFT" | "PENDING" | "SCHEDULED";
   scheduledAt?: string | Date | null;
   images?: string[];
+  platformOptions?: PlatformOptions;
   /** Reenvia um post que falhou. */
   retry?: boolean;
 }
@@ -115,13 +160,23 @@ export async function updatePost(workspaceId: string, postId: string, input: Upd
     throw new PostError("Informe a data e hora do agendamento.");
   }
 
+  const newImages = input.images ?? post.images;
+  const newOptions = parsePlatformOptions(input.platformOptions ?? post.platformOptions);
+  validateMediaAndOptions(
+    newStatus,
+    post.socialAccounts.map((psa) => psa.socialAccount.platform),
+    newImages,
+    newOptions
+  );
+
   const updated = await db.post.update({
     where: { id: postId },
     data: {
       content: input.content ?? post.content,
       status: newStatus,
       scheduledAt: newScheduledAt,
-      images: input.images ?? post.images,
+      images: newImages,
+      platformOptions: toJson(newOptions),
       ...(input.retry
         ? { failedAt: null, errorMessage: null }
         : {}),

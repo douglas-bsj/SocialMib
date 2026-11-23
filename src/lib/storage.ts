@@ -1,13 +1,16 @@
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { randomUUID } from "crypto";
-import { ALLOWED_TYPES } from "./storage-constants";
+import { ALLOWED_TYPES, ALLOWED_VIDEO_TYPES } from "./storage-constants";
 
 // Re-export client-safe helpers for existing server-side importers.
-export { ALLOWED_TYPES, MAX_FILE_SIZE, MAX_IMAGES_PER_POST, validateImage } from "./storage-constants";
+export {
+  ALLOWED_TYPES, ALLOWED_VIDEO_TYPES, MAX_FILE_SIZE, MAX_VIDEO_SIZE, MAX_IMAGES_PER_POST,
+  validateImage, validateMedia, isVideoUrl,
+} from "./storage-constants";
 
 export async function uploadFile(buffer: Buffer, mimeType: string): Promise<string> {
-  const ext = ALLOWED_TYPES[mimeType] ?? "bin";
+  const ext = ALLOWED_TYPES[mimeType] ?? ALLOWED_VIDEO_TYPES[mimeType] ?? "bin";
   const filename = `${randomUUID()}.${ext}`;
 
   if (process.env.S3_BUCKET && process.env.S3_ENDPOINT) {

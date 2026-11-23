@@ -133,6 +133,8 @@ model Post {
   id           String     @id @default(cuid())
   content      String
   images       String[]
+  /// Opções específicas por rede, ex.: { "tiktok": { "privacyLevel": "SELF_ONLY", ... } }
+  platformOptions Json?
   status       PostStatus @default(DRAFT)
   scheduledAt  DateTime?
   publishedAt  DateTime?

@@ -6,6 +6,14 @@ import { publishToReddit } from "./reddit";
 import { publishToInstagram } from "./instagram";
 import { publishToFacebook } from "./facebook";
 import { publishToPinterest } from "./pinterest";
+import { publishToTikTok } from "./tiktok";
+import { isVideoUrl } from "../storage-constants";
+import type { PlatformOptions } from "../tiktok-options";
+
+const PLATFORM_NAMES: Record<string, string> = {
+  TWITTER: "X/Twitter", LINKEDIN: "LinkedIn", THREADS: "Threads", BLUESKY: "Bluesky",
+  REDDIT: "Reddit", INSTAGRAM: "Instagram", FACEBOOK: "Facebook", PINTEREST: "Pinterest",
+};
 
 export interface SocialAccountInfo {
   accessToken: string;
@@ -30,10 +38,19 @@ export async function publish(
   account: SocialAccountInfo,
   content: string,
   rawImages: string[],
+  platformOptions: PlatformOptions = {},
   title?: string
 ): Promise<void> {
   const { accessToken, username } = account;
   const images = rawImages.map(toAbsoluteUrl);
+
+  // Por enquanto só o TikTok publica vídeo; nas outras redes, erro claro em vez
+  // de tentar enviar o vídeo como se fosse imagem.
+  if (platform !== "TIKTOK" && images.some(isVideoUrl)) {
+    throw new Error(
+      `${PLATFORM_NAMES[platform] ?? platform}: vídeo ainda não é suportado nesta rede pelo Mib Social. Use imagens ou publique o vídeo só no TikTok.`
+    );
+  }
 
   switch (platform) {
     case "TWITTER":
@@ -64,9 +81,7 @@ export async function publish(
       return publishToPinterest(accessToken, content, images);
 
     case "TIKTOK":
-      throw new Error(
-        "TikTok requer upload de vídeo — suporte a vídeo será adicionado em breve."
-      );
+      return publishToTikTok(accessToken, content, images, platformOptions.tiktok);
 
     case "YOUTUBE":
       throw new Error(

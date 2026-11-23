@@ -7,6 +7,7 @@ import { syncWorkspaceInbox } from "@/lib/inbox/sync";
 import { uploadFile } from "@/lib/storage";
 import { ALLOWED_TYPES, MAX_FILE_SIZE } from "@/lib/storage-constants";
 import { getBaseUrl } from "@/lib/social/config";
+import { TIKTOK_PRIVACY_LEVELS, parsePlatformOptions } from "@/lib/tiktok-options";
 import type { ApiKeyContext } from "@/lib/api-keys";
 import type { Platform, PostStatus, InboxType } from "@/generated/prisma/client";
 
@@ -85,6 +86,28 @@ const PLATFORMS = [
 ] as const;
 const POST_STATUSES = ["DRAFT", "PENDING", "SCHEDULED", "PUBLISHED", "FAILED"] as const;
 
+const TIKTOK_INPUT_SCHEMA = {
+  type: "object",
+  description:
+    "Opções do TikTok (obrigatório ao publicar/agendar em conta TikTok). privacyLevel deve ser escolhido pelo usuário entre as opções da conta; apps não auditados só aceitam SELF_ONLY.",
+  properties: {
+    privacyLevel: { type: "string", enum: [...TIKTOK_PRIVACY_LEVELS] },
+    allowComment: { type: "boolean" },
+    allowDuet: { type: "boolean" },
+    allowStitch: { type: "boolean" },
+  },
+  additionalProperties: false,
+};
+
+const tiktokArgs = z
+  .object({
+    privacyLevel: z.enum(TIKTOK_PRIVACY_LEVELS).optional(),
+    allowComment: z.boolean().optional(),
+    allowDuet: z.boolean().optional(),
+    allowStitch: z.boolean().optional(),
+  })
+  .optional();
+
 function absoluteUrl(url: string) {
   return url.startsWith("/") ? `${getBaseUrl()}${url}` : url;
 }
@@ -109,6 +132,7 @@ function serializePost(post: NonNullable<Awaited<ReturnType<typeof getPost>>>) {
       errorMessage: psa.errorMessage,
     })),
     variations: Object.fromEntries(post.variations.map((v) => [v.platform, v.content])),
+    tiktok: parsePlatformOptions(post.platformOptions).tiktok ?? null,
   };
 }
 
@@ -271,7 +295,7 @@ export const TOOLS = [
     name: "create_post",
     title: "Criar post",
     description:
-      "Cria um post em uma ou mais contas. mode: 'draft' (rascunho), 'now' (publica agora) ou 'schedule' (agenda; exige scheduledAt em ISO 8601 com fuso, ex.: 2026-12-01T09:00:00-03:00). Instagram exige pelo menos uma imagem; use upload_image_from_url para obter URLs de imagens.",
+      "Cria um post em uma ou mais contas. mode: 'draft' (rascunho), 'now' (publica agora) ou 'schedule' (agenda; exige scheduledAt em ISO 8601 com fuso, ex.: 2026-12-01T09:00:00-03:00). Instagram exige pelo menos uma imagem; use upload_image_from_url para obter URLs de imagens. TikTok exige mídia (fotos JPG/WebP; vídeo só pelo site) e tiktok.privacyLevel, que o usuário precisa escolher — pergunte a ele, não escolha sozinho.",
     inputSchema: {
       type: "object",
       properties: {
@@ -285,6 +309,7 @@ export const TOOLS = [
           description: "Texto específico por rede. Chaves: TWITTER, INSTAGRAM, FACEBOOK, LINKEDIN, THREADS, BLUESKY...",
           additionalProperties: { type: "string" },
         },
+        tiktok: TIKTOK_INPUT_SCHEMA,
       },
       required: ["content", "accountIds", "mode"],
       additionalProperties: false,
@@ -296,6 +321,7 @@ export const TOOLS = [
       scheduledAt: z.string().optional(),
       images: z.array(z.string()).max(10).optional(),
       variations: z.record(z.string(), z.string()).optional(),
+      tiktok: tiktokArgs,
     }),
     run: async (args, ctx) =>
       wrapPostError(async () => {
@@ -307,6 +333,7 @@ export const TOOLS = [
           scheduledAt: args.scheduledAt ?? null,
           images: args.images,
           variations: args.variations,
+          platformOptions: args.tiktok ? parsePlatformOptions({ tiktok: args.tiktok }) : undefined,
         });
         return serializePost(post);
       }),
@@ -325,6 +352,7 @@ export const TOOLS = [
         mode: { type: "string", enum: ["draft", "now", "schedule"] },
         scheduledAt: { type: "string", description: "ISO 8601 com fuso." },
         images: { type: "array", items: { type: "string" }, maxItems: 10 },
+        tiktok: TIKTOK_INPUT_SCHEMA,
       },
       required: ["postId"],
       additionalProperties: false,
@@ -335,6 +363,7 @@ export const TOOLS = [
       mode: z.enum(["draft", "now", "schedule"]).optional(),
       scheduledAt: z.string().optional(),
       images: z.array(z.string()).max(10).optional(),
+      tiktok: tiktokArgs,
     }),
     run: async (args, ctx) =>
       wrapPostError(async () => {
@@ -345,6 +374,7 @@ export const TOOLS = [
           status,
           scheduledAt: args.scheduledAt,
           images: args.images,
+          platformOptions: args.tiktok ? parsePlatformOptions({ tiktok: args.tiktok }) : undefined,
         });
         return serializePost(post);
       }),

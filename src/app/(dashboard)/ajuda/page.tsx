@@ -72,12 +72,19 @@ const GUIDES: Guide[] = [
     icon: "♪",
     bg: "bg-gray-900",
     requirement: "any",
-    summary: "Funciona com contas pessoais, de criador ou empresariais.",
+    summary:
+      "Funciona com contas pessoais, de criador ou empresariais. Publica vídeo (MP4, MOV ou WebM, até 95 MB) ou fotos (JPG ou WebP).",
     steps: [
       "No Mib Social, vá em Contas → Conectar Conta → TikTok.",
-      "Entre com a sua conta do TikTok e autorize o acesso.",
+      "Entre com a sua conta do TikTok e autorize o acesso, aceitando todas as permissões.",
+      "Ao criar o post, marque a conta TikTok, adicione o vídeo ou as fotos e escolha quem pode ver o post.",
     ],
-    tips: ["O TikTok aceita apenas vídeos."],
+    tips: [
+      "Enquanto o app do Mib Social não for aprovado (auditado) pelo TikTok, a conta TikTok precisa estar como privada e os posts saem visíveis só para você (“Só eu”). Depois dá para mudar cada post para “Todos” no app do TikTok.",
+      "Um post com vídeo vai só para o TikTok; as outras redes ainda não recebem vídeo pelo Mib Social.",
+      "Fotos só funcionam depois que o domínio do Mib Social for verificado no TikTok Developers. Vídeo não precisa disso.",
+      "O TikTok limita cerca de 15 posts por dia por conta.",
+    ],
   },
   {
     id: "linkedin",

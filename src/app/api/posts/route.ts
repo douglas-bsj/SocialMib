@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getUserWorkspace } from "@/lib/workspace";
 import { createPost, PostError } from "@/lib/posts";
+import { parsePlatformOptions } from "@/lib/tiktok-options";
 import { z } from "zod";
 
 const createPostSchema = z.object({
@@ -12,6 +13,8 @@ const createPostSchema = z.object({
   status: z.enum(["DRAFT", "PENDING", "SCHEDULED"]).default("DRAFT"),
   variations: z.record(z.string(), z.string()).optional(),
   images: z.array(z.string().min(1)).max(10).optional(),
+  // Validado/normalizado em parsePlatformOptions (src/lib/tiktok-options.ts).
+  platformOptions: z.record(z.string(), z.unknown()).optional(),
 });
 
 export async function GET() {
@@ -60,6 +63,7 @@ export async function POST(request: NextRequest) {
       scheduledAt: data.scheduledAt,
       images: data.images,
       variations: data.variations,
+      platformOptions: parsePlatformOptions(data.platformOptions),
     });
 
     return NextResponse.json({ post }, { status: 201 });

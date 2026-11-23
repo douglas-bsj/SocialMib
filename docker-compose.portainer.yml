@@ -130,6 +130,9 @@ services:
       # URL pública do app: as imagens enviadas (/uploads/...) viram links completos
       # para o worker baixá-las e para Instagram/Facebook/etc. buscarem.
       NEXTAUTH_URL: ${NEXTAUTH_URL}
+      # O token do TikTok dura poucas horas: o worker renova antes de publicar.
+      TIKTOK_CLIENT_KEY: ${TIKTOK_CLIENT_KEY:-}
+      TIKTOK_CLIENT_SECRET: ${TIKTOK_CLIENT_SECRET:-}
       NODE_ENV: production
     depends_on:
       db:

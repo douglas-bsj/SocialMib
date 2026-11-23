@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,7 +13,14 @@ import {
   Send, Clock, Image as ImageIcon, Smile, Hash, AlertCircle,
   Sparkles, Wand2, RefreshCw, X, ArrowLeft, Plus, Loader2,
 } from "lucide-react";
-import { MAX_IMAGES_PER_POST } from "@/lib/storage-constants";
+import { MAX_IMAGES_PER_POST, isVideoUrl } from "@/lib/storage-constants";
+import {
+  TIKTOK_MUSIC_CONFIRMATION_URL,
+  TIKTOK_PRIVACY_LABELS,
+  type TikTokCreatorInfo,
+  type TikTokOptions,
+  type TikTokPrivacyLevel,
+} from "@/lib/tiktok-options";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -55,6 +62,40 @@ interface SocialAccount {
   username?: string;
 }
 
+const MEDIA_ACCEPT = "image/jpeg,image/png,image/gif,image/webp,video/mp4,video/quicktime,video/webm";
+
+/** Miniatura de imagem ou vídeo. */
+function MediaThumb({
+  url,
+  className,
+  style,
+  onDuration,
+}: {
+  url: string;
+  className?: string;
+  style?: React.CSSProperties;
+  onDuration?: (seconds: number) => void;
+}) {
+  if (isVideoUrl(url)) {
+    return (
+      <video
+        src={url}
+        className={className}
+        style={style}
+        muted
+        playsInline
+        controls
+        preload="metadata"
+        onLoadedMetadata={(e) => onDuration?.(e.currentTarget.duration)}
+      />
+    );
+  }
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={url} alt="" className={className} style={style} />;
+}
+
+type TikTokInfoState = { loading: boolean; info?: TikTokCreatorInfo; error?: string };
+
 type Tone = "casual" | "professional" | "humorous" | "inspirational";
 
 const TONE_LABELS: Record<Tone, string> = {
@@ -84,6 +125,12 @@ function PublishPageInner() {
   const [images, setImages] = useState<string[]>([]);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [videoDuration, setVideoDuration] = useState<number | null>(null);
+
+  // TikTok: dados da conta (creator_info) e opções escolhidas pelo usuário.
+  const [tiktokInfo, setTiktokInfo] = useState<Record<string, TikTokInfoState>>({});
+  const [tiktokOptions, setTiktokOptions] = useState<TikTokOptions>({});
+  const tiktokRequested = useRef<Set<string>>(new Set());
 
   // AI state
   const [aiOpen, setAiOpen] = useState(false);
@@ -138,6 +185,10 @@ function PublishPageInner() {
         if (post.images && post.images.length > 0) {
           setImages(post.images);
         }
+
+        if (post.platformOptions?.tiktok) {
+          setTiktokOptions(post.platformOptions.tiktok);
+        }
       } finally {
         setLoadingEdit(false);
       }
@@ -149,13 +200,23 @@ function PublishPageInner() {
   async function handleImageFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
 
+    const list = Array.from(files);
+    const video = list.find((f) => f.type.startsWith("video/"));
+    if (video || images.some(isVideoUrl)) {
+      // Vídeo vai sozinho no post.
+      if (images.length > 0 || list.length > 1) {
+        setUploadError("Um post com vídeo não pode ter outras imagens ou vídeos. Remova a mídia atual primeiro.");
+        return;
+      }
+    }
+
     const remaining = MAX_IMAGES_PER_POST - images.length;
     if (remaining <= 0) {
       setUploadError(`Máximo de ${MAX_IMAGES_PER_POST} imagens por post.`);
       return;
     }
 
-    const toUpload = Array.from(files).slice(0, remaining);
+    const toUpload = video ? [video] : list.slice(0, remaining);
     setUploadingImages(true);
     setUploadError("");
 
@@ -183,7 +244,55 @@ function PublishPageInner() {
 
   function removeImage(url: string) {
     setImages((prev) => prev.filter((u) => u !== url));
+    if (isVideoUrl(url)) setVideoDuration(null);
   }
+
+  // Busca os dados de cada conta TikTok selecionada (regra do TikTok: mostrar
+  // a conta e as opções permitidas antes de publicar).
+  const selectedTikTokIds = accounts
+    .filter((a) => a.platform === "TIKTOK" && selectedAccounts.includes(a.id))
+    .map((a) => a.id);
+
+  useEffect(() => {
+    for (const id of selectedTikTokIds) {
+      // Sem resultado ainda = "carregando" na tela; o ref evita buscar duas vezes.
+      if (tiktokRequested.current.has(id)) continue;
+      tiktokRequested.current.add(id);
+      fetch(`/api/social/tiktok/creator-info?accountId=${encodeURIComponent(id)}`)
+        .then(async (r) => {
+          const d = await r.json().catch(() => ({}));
+          setTiktokInfo((prev) => ({
+            ...prev,
+            [id]: r.ok ? { loading: false, info: d.info } : { loading: false, error: d.error ?? "Erro ao consultar o TikTok." },
+          }));
+        })
+        .catch(() =>
+          setTiktokInfo((prev) => ({ ...prev, [id]: { loading: false, error: "Erro de rede ao consultar o TikTok." } }))
+        );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTikTokIds.join(",")]);
+
+  const tiktokSelected = selectedTikTokIds.length > 0;
+  const tiktokInfos = selectedTikTokIds
+    .map((id) => tiktokInfo[id]?.info)
+    .filter((i): i is TikTokCreatorInfo => !!i);
+  // Com mais de uma conta TikTok, valem só as opções permitidas em todas.
+  const tiktokPrivacyOptions = tiktokInfos.length
+    ? tiktokInfos.reduce<TikTokPrivacyLevel[]>(
+        (acc, i) => acc.filter((p) => i.privacyLevelOptions.includes(p)),
+        tiktokInfos[0].privacyLevelOptions
+      )
+    : [];
+  const tiktokCommentDisabled = tiktokInfos.some((i) => i.commentDisabled);
+  const tiktokDuetDisabled = tiktokInfos.some((i) => i.duetDisabled);
+  const tiktokStitchDisabled = tiktokInfos.some((i) => i.stitchDisabled);
+  const tiktokMaxDuration = tiktokInfos.length
+    ? Math.min(...tiktokInfos.map((i) => i.maxVideoPostDurationSec || Infinity))
+    : Infinity;
+  const hasVideo = images.some(isVideoUrl);
+  const tiktokDurationTooLong =
+    tiktokSelected && hasVideo && videoDuration !== null && isFinite(tiktokMaxDuration) && videoDuration > tiktokMaxDuration;
 
   function toggleAccount(id: string) {
     setSelectedAccounts((prev) =>
@@ -267,6 +376,20 @@ function PublishPageInner() {
       setError("Defina a data e hora de agendamento.");
       return;
     }
+    if (!draft && tiktokSelected) {
+      if (images.length === 0) {
+        setError("O TikTok exige um vídeo ou fotos no post.");
+        return;
+      }
+      if (!tiktokOptions.privacyLevel) {
+        setError("Escolha quem pode ver o post no TikTok.");
+        return;
+      }
+      if (tiktokDurationTooLong) {
+        setError(`O vídeo passa do tempo máximo que esta conta pode postar no TikTok (${tiktokMaxDuration}s).`);
+        return;
+      }
+    }
 
     setError("");
     setSubmitting(true);
@@ -279,6 +402,7 @@ function PublishPageInner() {
       status,
       variations: useVariations ? variations : {},
       images,
+      platformOptions: { tiktok: tiktokOptions },
     };
 
     try {
@@ -311,6 +435,8 @@ function PublishPageInner() {
         setUseVariations(false);
         setImages([]);
         setUploadError("");
+        setVideoDuration(null);
+        setTiktokOptions({});
         setTimeout(() => setSuccess(false), 3000);
       }
     } catch {
@@ -483,9 +609,15 @@ function PublishPageInner() {
                 {images.length > 0 && (
                   <div className="mt-3 grid grid-cols-4 gap-2">
                     {images.map((url) => (
-                      <div key={url} className="group relative aspect-square overflow-hidden rounded-lg border border-gray-200">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={url} alt="" className="h-full w-full object-cover" />
+                      <div
+                        key={url}
+                        className={`group relative overflow-hidden rounded-lg border border-gray-200 bg-black ${isVideoUrl(url) ? "col-span-2 aspect-video" : "aspect-square"}`}
+                      >
+                        <MediaThumb
+                          url={url}
+                          className={isVideoUrl(url) ? "h-full w-full object-contain" : "h-full w-full object-cover"}
+                          onDuration={setVideoDuration}
+                        />
                         <button
                           onClick={() => removeImage(url)}
                           className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
@@ -494,7 +626,7 @@ function PublishPageInner() {
                         </button>
                       </div>
                     ))}
-                    {images.length < MAX_IMAGES_PER_POST && (
+                    {images.length < MAX_IMAGES_PER_POST && !hasVideo && (
                       <label className="flex aspect-square cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-gray-200 text-gray-300 hover:border-violet-300 hover:text-violet-400 transition-colors">
                         {uploadingImages ? (
                           <Loader2 className="h-5 w-5 animate-spin" />
@@ -524,8 +656,9 @@ function PublishPageInner() {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-gray-400 hover:text-violet-600"
-                        disabled={uploadingImages || images.length >= MAX_IMAGES_PER_POST}
+                        disabled={uploadingImages || hasVideo || images.length >= MAX_IMAGES_PER_POST}
                         asChild
+                        title="Adicionar imagens ou um vídeo"
                       >
                         <span>
                           {uploadingImages ? (
@@ -537,10 +670,10 @@ function PublishPageInner() {
                       </Button>
                       <input
                         type="file"
-                        accept="image/jpeg,image/png,image/gif,image/webp"
+                        accept={MEDIA_ACCEPT}
                         multiple
                         className="sr-only"
-                        disabled={uploadingImages || images.length >= MAX_IMAGES_PER_POST}
+                        disabled={uploadingImages || hasVideo || images.length >= MAX_IMAGES_PER_POST}
                         onChange={(e) => handleImageFiles(e.target.files)}
                       />
                     </label>
@@ -554,7 +687,9 @@ function PublishPageInner() {
                   <div className="flex items-center gap-3">
                     {images.length > 0 && (
                       <span className="text-xs text-gray-400">
-                        {images.length}/{MAX_IMAGES_PER_POST} imagens
+                        {hasVideo
+                          ? `1 vídeo${videoDuration ? ` · ${Math.round(videoDuration)}s` : ""}`
+                          : `${images.length}/${MAX_IMAGES_PER_POST} imagens`}
                       </span>
                     )}
                     <span className="text-xs text-gray-400">{content.length} caracteres</span>
@@ -564,6 +699,114 @@ function PublishPageInner() {
             )}
           </CardContent>
         </Card>
+
+        {/* TikTok: regras de publicação do TikTok (Content Sharing Guidelines) */}
+        {tiktokSelected && (
+          <Card className="mb-4 border-rose-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <span>♪</span> Configurações do TikTok
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {selectedTikTokIds.map((id) => {
+                const state = tiktokInfo[id];
+                const account = accounts.find((a) => a.id === id);
+                if (!state || state.loading) {
+                  return (
+                    <p key={id} className="flex items-center gap-2 text-xs text-gray-500">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Consultando a conta {account?.name} no TikTok...
+                    </p>
+                  );
+                }
+                if (state.error) {
+                  return (
+                    <p key={id} className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                      {account?.name}: {state.error}
+                    </p>
+                  );
+                }
+                return (
+                  <div key={id} className="flex items-center gap-2 text-sm">
+                    {state.info?.avatarUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={state.info.avatarUrl} alt="" className="h-7 w-7 rounded-full object-cover" />
+                    )}
+                    <span className="text-gray-600">
+                      Publicando como <strong>{state.info?.nickname}</strong>
+                      {state.info?.username && <span className="text-gray-400"> @{state.info.username}</span>}
+                    </span>
+                  </div>
+                );
+              })}
+
+              <div>
+                <Label className="mb-1.5 block">Quem pode ver este post?</Label>
+                <Select
+                  value={tiktokOptions.privacyLevel ?? ""}
+                  onValueChange={(v) => setTiktokOptions((o) => ({ ...o, privacyLevel: v as TikTokPrivacyLevel }))}
+                  disabled={tiktokPrivacyOptions.length === 0}
+                >
+                  <SelectTrigger className="text-sm">
+                    <SelectValue placeholder="Escolha a privacidade" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tiktokPrivacyOptions.map((p) => (
+                      <SelectItem key={p} value={p}>{TIKTOK_PRIVACY_LABELS[p]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex flex-wrap gap-x-6 gap-y-2">
+                {[
+                  { key: "allowComment" as const, label: "Permitir comentários", disabled: tiktokCommentDisabled, show: true },
+                  { key: "allowDuet" as const, label: "Permitir Dueto", disabled: tiktokDuetDisabled, show: hasVideo },
+                  { key: "allowStitch" as const, label: "Permitir Costura (Stitch)", disabled: tiktokStitchDisabled, show: hasVideo },
+                ]
+                  .filter((o) => o.show)
+                  .map((o) => (
+                    <div key={o.key} className="flex items-center gap-2">
+                      <Switch
+                        id={`tt-${o.key}`}
+                        checked={!o.disabled && !!tiktokOptions[o.key]}
+                        disabled={o.disabled}
+                        onCheckedChange={(v) => setTiktokOptions((prev) => ({ ...prev, [o.key]: v }))}
+                      />
+                      <Label htmlFor={`tt-${o.key}`} className={o.disabled ? "text-gray-400" : "cursor-pointer"}>
+                        {o.label}
+                        {o.disabled && " (desativado na conta)"}
+                      </Label>
+                    </div>
+                  ))}
+              </div>
+
+              {images.length === 0 && (
+                <p className="text-xs text-amber-700">
+                  O TikTok exige mídia: um vídeo (MP4, MOV ou WebM, até 95 MB) ou fotos em JPG/WebP.
+                </p>
+              )}
+              {tiktokDurationTooLong && (
+                <p className="text-xs text-red-600">
+                  O vídeo tem {Math.round(videoDuration ?? 0)}s; esta conta pode postar até {tiktokMaxDuration}s.
+                </p>
+              )}
+              {hasVideo && selectedPlatforms.some((p) => p !== "TIKTOK") && (
+                <p className="text-xs text-amber-700">
+                  Por enquanto, vídeo só é publicado no TikTok. Desmarque as outras redes ou use imagens.
+                </p>
+              )}
+
+              <p className="text-xs text-gray-500">
+                Ao publicar, você concorda com a{" "}
+                <a href={TIKTOK_MUSIC_CONFIRMATION_URL} target="_blank" rel="noreferrer" className="text-violet-600 underline">
+                  Confirmação de Uso de Música do TikTok
+                </a>
+                . O post pode levar alguns minutos para aparecer no perfil.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Options */}
         <div className="mb-6 flex flex-wrap gap-4">
@@ -668,12 +911,10 @@ function PublishPageInner() {
                     {images.length > 0 && (
                       <div className={`mt-2 grid gap-1 ${images.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
                         {images.map((url) => (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
+                          <MediaThumb
                             key={url}
-                            src={url}
-                            alt=""
-                            className="w-full rounded object-cover"
+                            url={url}
+                            className="w-full rounded object-cover bg-black"
                             style={{ maxHeight: images.length === 1 ? 140 : 70 }}
                           />
                         ))}

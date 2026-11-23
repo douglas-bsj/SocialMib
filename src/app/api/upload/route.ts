@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { uploadFile, validateImage } from "@/lib/storage";
+import { uploadFile, validateMedia } from "@/lib/storage";
 import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Nenhum arquivo enviado." }, { status: 400 });
   }
 
-  const validationError = validateImage(file);
+  const validationError = validateMedia(file);
   if (validationError) {
     return NextResponse.json({ error: validationError }, { status: 400 });
   }

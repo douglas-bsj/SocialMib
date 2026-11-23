@@ -4,6 +4,8 @@ import { PrismaClient } from "../generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Redis } from "ioredis";
 import { publish } from "../lib/publishers/index";
+import { getValidTikTokToken } from "../lib/social/tiktok";
+import { parsePlatformOptions } from "../lib/tiktok-options";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
@@ -81,15 +83,27 @@ const worker = new Worker(
         console.log(`  → ${socialAccount.platform} (@${socialAccount.username ?? socialAccount.name})`);
 
         try {
+          let accessToken = socialAccount.accessToken;
+          // O token do TikTok dura poucas horas: renova e salva antes de publicar.
+          if (socialAccount.platform === "TIKTOK") {
+            accessToken = await getValidTikTokToken(socialAccount, (t) =>
+              prisma.socialAccount.update({
+                where: { id: socialAccount.id },
+                data: { accessToken: t.accessToken, refreshToken: t.refreshToken, expiresAt: t.expiresAt },
+              })
+            );
+          }
+
           await publish(
             socialAccount.platform,
             {
-              accessToken: socialAccount.accessToken,
+              accessToken,
               refreshToken: socialAccount.refreshToken,
               username: socialAccount.username,
             },
             content,
-            images
+            images,
+            parsePlatformOptions(post.platformOptions)
           );
 
           await prisma.postSocialAccount.update({
