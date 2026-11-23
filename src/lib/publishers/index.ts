@@ -13,14 +13,27 @@ export interface SocialAccountInfo {
   username?: string | null;
 }
 
+// Uploads sem S3 são salvos como "/uploads/<arquivo>". O worker precisa baixar a
+// imagem e as redes (Instagram, Facebook...) precisam de uma URL pública, então
+// caminhos relativos viram absolutos com a URL pública do app.
+function toAbsoluteUrl(url: string): string {
+  if (!url.startsWith("/")) return url;
+  const base = (process.env.NEXTAUTH_URL || process.env.AUTH_URL || "").replace(/\/+$/, "");
+  if (!base) {
+    throw new Error("Imagem local sem NEXTAUTH_URL configurada no worker: não há como gerar a URL pública.");
+  }
+  return `${base}${url}`;
+}
+
 export async function publish(
   platform: string,
   account: SocialAccountInfo,
   content: string,
-  images: string[],
+  rawImages: string[],
   title?: string
 ): Promise<void> {
   const { accessToken, username } = account;
+  const images = rawImages.map(toAbsoluteUrl);
 
   switch (platform) {
     case "TWITTER":

@@ -58,6 +58,10 @@ COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts                 
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/docker-entrypoint.sh     ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 
+# Pasta dos uploads (sem S3). Na stack ela vira um volume; criá-la aqui com dono
+# nextjs faz o Docker inicializar o volume novo com essa permissão.
+RUN mkdir -p /app/uploads && chown nextjs:nodejs /app/uploads
+
 USER nextjs
 EXPOSE 3000
 

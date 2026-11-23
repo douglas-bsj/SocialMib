@@ -58,6 +58,15 @@ services:
       # Configurações → Membros. Defina "true" no Env da stack para reabrir.
       ALLOW_PUBLIC_REGISTER: ${ALLOW_PUBLIC_REGISTER:-false}
       NODE_ENV: production
+      # Imagens enviadas (sem S3) ficam no volume "uploads" e sobrevivem ao redeploy.
+      UPLOAD_DIR: /app/uploads
+      # Opcional: storage S3 (R2, MinIO...). Com S3_BUCKET + S3_ENDPOINT, o volume deixa de ser usado.
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-}
+      S3_REGION: ${S3_REGION:-}
+      S3_PUBLIC_URL: ${S3_PUBLIC_URL:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-dummy}
       RESEND_API_KEY: ${RESEND_API_KEY:-re_dummy}
       # ── E-mail (recuperação de senha, convites) ──
@@ -91,6 +100,8 @@ services:
       THREADS_CLIENT_SECRET: ${THREADS_CLIENT_SECRET:-}
       REDDIT_CLIENT_ID: ${REDDIT_CLIENT_ID:-}
       REDDIT_CLIENT_SECRET: ${REDDIT_CLIENT_SECRET:-}
+    volumes:
+      - uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -116,6 +127,9 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
+      # URL pública do app: as imagens enviadas (/uploads/...) viram links completos
+      # para o worker baixá-las e para Instagram/Facebook/etc. buscarem.
+      NEXTAUTH_URL: ${NEXTAUTH_URL}
       NODE_ENV: production
     depends_on:
       db:
@@ -149,3 +163,4 @@ services:
 volumes:
   pgdata:
   redisdata:
+  uploads:

@@ -31,6 +31,11 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [{ source: "/settings/billing/:path*", destination: "/settings/profile", permanent: false }];
   },
+  // Imagens enviadas sem S3 ficam num volume e são servidas por /api/uploads/[file].
+  // Os posts guardam "/uploads/<arquivo>"; arquivos que existam em /public têm prioridade.
+  async rewrites() {
+    return [{ source: "/uploads/:file", destination: "/api/uploads/:file" }];
+  },
   async headers() {
     return [
       {

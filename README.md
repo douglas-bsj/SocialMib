@@ -91,7 +91,8 @@ Pré-requisitos: Node 22+ e Docker.
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_RESET_PASSWORD` | Criação/recuperação do primeiro admin |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE`, `EMAIL_FROM` | E-mails (recuperação de senha, convites) |
 | `OPENAI_API_KEY` | Geração de texto por IA (opcional) |
-| `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_REGION`, `S3_PUBLIC_URL` | Guardar imagens num storage S3 (opcional; sem isso vão para `public/uploads` — ver Cuidados) |
+| `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_REGION`, `S3_PUBLIC_URL` | Guardar imagens num storage S3 (opcional; sem isso vão para o volume `uploads` — ver Cuidados) |
+| `UPLOAD_DIR` | Pasta dos uploads locais (padrão `public/uploads`; na stack, `/app/uploads`) |
 | `<REDE>_CLIENT_ID` / `_CLIENT_SECRET` | OAuth de cada rede (Twitter, Instagram, Facebook, LinkedIn, TikTok, YouTube, Pinterest, Threads, Reddit). Callback a cadastrar: `${NEXTAUTH_URL}/api/social/<rede>/callback` |
 
 ## Produção (servidor local 192.168.50.242)
@@ -163,6 +164,9 @@ Padrão geral para publicar outros apps: `EXPOSICAO-PUBLICA-SERVIDOR-LOCAL.md` (
 - Arquivos `.sh` precisam de fim de linha LF (há `.gitattributes`); CRLF quebra o entrypoint no container.
 - Prisma 7 lê a URL do banco pelo `prisma.config.ts`, não pelo `schema.prisma`.
 - O `next build` avalia módulos de rota: o Dockerfile define variáveis dummy só na etapa de build.
-- **Imagens enviadas podem se perder:** sem S3, os uploads ficam em `public/uploads` dentro do
-  container `app`, e a stack não tem volume para essa pasta nem repassa as variáveis `S3_*`.
-  Cada redeploy recria o container.
+- **Imagens enviadas (sem S3):** ficam no volume `uploads` (`UPLOAD_DIR=/app/uploads`) e são
+  servidas por `/api/uploads/[file]` — `/uploads/<arquivo>` é reescrito para lá no
+  `next.config.ts`, porque o Next só serve de `public/` o que existia no build. Essa rota é
+  pública de propósito: as redes baixam a imagem por ela. O worker transforma `/uploads/...` em
+  URL completa com `NEXTAUTH_URL`, então essa variável precisa estar no worker também.
+  Imagens enviadas antes do volume existir (até 23/11/2026) se perderam nos redeploys anteriores.

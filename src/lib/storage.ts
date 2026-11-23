@@ -17,10 +17,19 @@ export async function uploadFile(buffer: Buffer, mimeType: string): Promise<stri
   return uploadLocal(buffer, filename);
 }
 
+// Pasta dos uploads locais (sem S3). Em produção é um volume Docker, para não
+// perder as imagens a cada redeploy. Os arquivos são servidos por
+// src/app/api/uploads/[file]/route.ts (o Next só serve de /public o que já
+// existia no build), e /uploads/:file é reescrito para essa rota no next.config.
+export function uploadDir(): string {
+  // turbopackIgnore: caminho de runtime; sem isso o build rastreia o projeto inteiro.
+  return process.env.UPLOAD_DIR || join(/*turbopackIgnore: true*/ process.cwd(), "public", "uploads");
+}
+
 async function uploadLocal(buffer: Buffer, filename: string): Promise<string> {
-  const dir = join(process.cwd(), "public", "uploads");
+  const dir = uploadDir();
   await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, filename), buffer);
+  await writeFile(join(/*turbopackIgnore: true*/ dir, filename), buffer);
   return `/uploads/${filename}`;
 }
 
@@ -31,8 +40,9 @@ async function uploadS3(buffer: Buffer, filename: string, mimeType: string): Pro
   const bucket = process.env.S3_BUCKET!;
   const accessKey = process.env.S3_ACCESS_KEY ?? "";
   const secretKey = process.env.S3_SECRET_KEY ?? "";
-  const region = process.env.S3_REGION ?? "auto";
-  const publicUrl = process.env.S3_PUBLIC_URL ?? `${endpoint}/${bucket}`;
+  // "||" e não "??": a stack repassa essas variáveis vazias quando não configuradas.
+  const region = process.env.S3_REGION || "auto";
+  const publicUrl = process.env.S3_PUBLIC_URL || `${endpoint}/${bucket}`;
 
   const url = `${endpoint}/${bucket}/${filename}`;
   const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
