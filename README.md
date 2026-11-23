@@ -22,6 +22,18 @@ BullMQ + Redis (worker de publicação) · SMTP (e-mails) · OpenAI (geração d
 | `/api/mcp` | Servidor MCP (autenticação por chave de API criada em Configurações → API e IA) |
 | `/api/health` | Saúde do app (usado pelos healthchecks) |
 
+## Situação de cada rede
+
+| Rede | Publicar | Inbox |
+|------|----------|-------|
+| Twitter/X, LinkedIn, Threads, Instagram, Facebook | sim | sim |
+| Bluesky, Reddit, Pinterest | sim | — |
+| TikTok, YouTube | **não** — falta envio de vídeo (`src/lib/publishers/index.ts`) | — |
+
+Instagram exige imagem em todo post. Bluesky não usa OAuth: conecta com o handle e uma
+*app password* criada no próprio Bluesky. As demais só ficam conectáveis depois que as chaves
+OAuth delas estiverem no Env da stack (veja [Variáveis de ambiente](#variáveis-de-ambiente)).
+
 ## Contas de usuário e cadastro público
 
 Por padrão **não existe cadastro público**: `/register` redireciona para `/login` e
@@ -62,7 +74,7 @@ Pré-requisitos: Node 22+ e Docker.
    npm ci
    npx prisma generate
    npx prisma migrate deploy
-   npx tsx scripts/create-admin.ts   # lê ADMIN_EMAIL/ADMIN_PASSWORD do ambiente
+   npx tsx --env-file=.env scripts/create-admin.ts   # o script não carrega o .env sozinho
    ```
 4. Subir: `npm run dev` (app em <http://localhost:3000>) e, para os agendamentos,
    `npm run worker` em outro terminal.
@@ -79,6 +91,7 @@ Pré-requisitos: Node 22+ e Docker.
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_RESET_PASSWORD` | Criação/recuperação do primeiro admin |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE`, `EMAIL_FROM` | E-mails (recuperação de senha, convites) |
 | `OPENAI_API_KEY` | Geração de texto por IA (opcional) |
+| `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_REGION`, `S3_PUBLIC_URL` | Guardar imagens num storage S3 (opcional; sem isso vão para `public/uploads` — ver Cuidados) |
 | `<REDE>_CLIENT_ID` / `_CLIENT_SECRET` | OAuth de cada rede (Twitter, Instagram, Facebook, LinkedIn, TikTok, YouTube, Pinterest, Threads, Reddit). Callback a cadastrar: `${NEXTAUTH_URL}/api/social/<rede>/callback` |
 
 ## Produção (servidor local 192.168.50.242)
@@ -89,6 +102,22 @@ Pré-requisitos: Node 22+ e Docker.
 - O app responde na rede interna em `http://192.168.50.242:8090`.
 - Segredos e variáveis ficam só no Env da stack no Portainer, nunca neste repositório.
 - Migrações rodam sozinhas no start do container `app` (`prisma migrate deploy`).
+- As imagens `mibsocial-app` e `mibsocial-worker` são geradas no servidor (`pull_policy: build`);
+  não existem no Docker Hub. Sem isso, "Pull and redeploy" com re-pull falha com
+  `pull access denied`.
+- O serviço `seed` cria/atualiza o admin e termina: ficar `exited (0)` é normal.
+- `subir-atualizacao.bat`: para quem recebe mudanças como arquivos `.patch` — coloque-os na pasta
+  do projeto e dê dois cliques; o script aplica, envia à `main` (= deploy) e apaga os `.patch`.
+
+## Conectar agentes de IA (MCP)
+
+1. Em **Configurações → API e IA**, crie uma chave (começa com `msk_`).
+2. No agente, adicione um servidor MCP HTTP com URL `${NEXTAUTH_URL}/api/mcp` e o cabeçalho
+   `Authorization: Bearer msk_...` (também aceita `X-API-Key` ou `?key=`).
+
+Ferramentas: `get_workspace`, `list_accounts`, `set_account_active`, `list_posts`, `get_post`,
+`create_post`, `update_post`, `retry_post`, `delete_post`, `upload_image_from_url`, `list_inbox`,
+`mark_inbox_read`, `sync_inbox`, `get_analytics` (definidas em `src/lib/mcp/tools.ts`).
 
 ## Acesso pela internet (Cloudflare)
 
@@ -134,3 +163,6 @@ Padrão geral para publicar outros apps: `EXPOSICAO-PUBLICA-SERVIDOR-LOCAL.md` (
 - Arquivos `.sh` precisam de fim de linha LF (há `.gitattributes`); CRLF quebra o entrypoint no container.
 - Prisma 7 lê a URL do banco pelo `prisma.config.ts`, não pelo `schema.prisma`.
 - O `next build` avalia módulos de rota: o Dockerfile define variáveis dummy só na etapa de build.
+- **Imagens enviadas podem se perder:** sem S3, os uploads ficam em `public/uploads` dentro do
+  container `app`, e a stack não tem volume para essa pasta nem repassa as variáveis `S3_*`.
+  Cada redeploy recria o container.
