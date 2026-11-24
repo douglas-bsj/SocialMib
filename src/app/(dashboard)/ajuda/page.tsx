@@ -96,6 +96,8 @@ const GUIDES: Guide[] = [
     steps: [
       "No Mib Social, vá em Contas → Conectar Conta → LinkedIn.",
       "Entre com a sua conta do LinkedIn e clique em “Permitir”.",
+      "Imagens: JPG, PNG ou GIF (até 20 por post). Vídeo ainda não é publicado no LinkedIn.",
+      "A autorização do LinkedIn dura 60 dias. Depois disso, reconecte a conta em Contas.",
     ],
   },
   {

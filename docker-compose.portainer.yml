@@ -133,6 +133,8 @@ services:
       # O token do TikTok dura poucas horas: o worker renova antes de publicar.
       TIKTOK_CLIENT_KEY: ${TIKTOK_CLIENT_KEY:-}
       TIKTOK_CLIENT_SECRET: ${TIKTOK_CLIENT_SECRET:-}
+      # Opcional: versão da API do LinkedIn (AAAAMM). Vazio = padrão do código.
+      LINKEDIN_API_VERSION: ${LINKEDIN_API_VERSION:-}
       NODE_ENV: production
     depends_on:
       db:
