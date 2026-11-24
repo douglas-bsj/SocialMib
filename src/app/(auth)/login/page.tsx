@@ -29,6 +29,12 @@ export default function LoginPage() {
             <Link href="/register" className="text-violet-600 font-medium hover:underline">Cadastre-se grátis</Link>
           </p>
         )}
+        <p className="mt-8 flex justify-center gap-4 text-xs text-gray-400">
+          <Link href="/" className="hover:text-violet-600">Início</Link>
+          <Link href="/privacidade" className="hover:text-violet-600">Privacidade</Link>
+          <Link href="/termos" className="hover:text-violet-600">Termos</Link>
+          <Link href="/contato" className="hover:text-violet-600">Contato</Link>
+        </p>
       </div>
     </div>
   );
