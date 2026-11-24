@@ -41,7 +41,7 @@ const FEATURES = [
 ];
 
 const NETWORKS = [
-  "Instagram", "Facebook", "TikTok", "LinkedIn", "X (Twitter)", "Threads", "Bluesky", "Pinterest", "Reddit",
+  "Instagram", "Facebook", "TikTok", "X (Twitter)", "Threads", "Bluesky", "Pinterest", "Reddit",
 ];
 
 const STEPS = [

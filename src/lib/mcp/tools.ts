@@ -81,7 +81,7 @@ function tool<S extends z.ZodTypeAny>(def: ToolDef<S>) {
 }
 
 const PLATFORMS = [
-  "TWITTER", "INSTAGRAM", "FACEBOOK", "LINKEDIN", "TIKTOK",
+  "TWITTER", "INSTAGRAM", "FACEBOOK", "TIKTOK",
   "YOUTUBE", "PINTEREST", "REDDIT", "BLUESKY", "THREADS",
 ] as const;
 const POST_STATUSES = ["DRAFT", "PENDING", "SCHEDULED", "PUBLISHED", "FAILED"] as const;
@@ -306,7 +306,7 @@ export const TOOLS = [
         images: { type: "array", items: { type: "string" }, maxItems: 10, description: "URLs públicas das imagens." },
         variations: {
           type: "object",
-          description: "Texto específico por rede. Chaves: TWITTER, INSTAGRAM, FACEBOOK, LINKEDIN, THREADS, BLUESKY...",
+          description: "Texto específico por rede. Chaves: TWITTER, INSTAGRAM, FACEBOOK, TIKTOK, THREADS, BLUESKY...",
           additionalProperties: { type: "string" },
         },
         tiktok: TIKTOK_INPUT_SCHEMA,

@@ -29,7 +29,8 @@ export async function GET(
   const { platform } = await params;
   const config = PLATFORM_CONFIGS[platform as PlatformId];
 
-  if (!config) {
+  // LinkedIn foi retirado do site; o código de publicação continua guardado.
+  if (!config || platform === "linkedin") {
     return accountsRedirect(`Plataforma "${platform}" não suportada.`);
   }
 

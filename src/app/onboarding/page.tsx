@@ -10,7 +10,6 @@ import { Zap, ArrowRight, Loader2, CheckCircle2 } from "lucide-react";
 const PLATFORMS = [
   { id: "INSTAGRAM", label: "Instagram", icon: "📸", color: "bg-pink-50 border-pink-200 text-pink-700" },
   { id: "TWITTER", label: "Twitter / X", icon: "𝕏", color: "bg-sky-50 border-sky-200 text-sky-700" },
-  { id: "LINKEDIN", label: "LinkedIn", icon: "in", color: "bg-blue-50 border-blue-200 text-blue-800" },
   { id: "FACEBOOK", label: "Facebook", icon: "f", color: "bg-blue-50 border-blue-200 text-blue-600" },
   { id: "TIKTOK", label: "TikTok", icon: "♪", color: "bg-rose-50 border-rose-200 text-rose-700" },
   { id: "YOUTUBE", label: "YouTube", icon: "▶", color: "bg-red-50 border-red-200 text-red-600" },

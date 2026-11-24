@@ -23,7 +23,7 @@ export default function PrivacidadePage() {
         <ul className="list-disc space-y-1.5 pl-5">
           <li><strong>Dados de cadastro:</strong> nome, e-mail e senha (armazenada com hash, nunca em texto puro), ou dados básicos de perfil quando você entra com sua conta Google.</li>
           <li><strong>Dados de workspace:</strong> nome e slug do workspace, papel de cada membro (proprietário, admin, membro).</li>
-          <li><strong>Contas de redes sociais conectadas:</strong> quando você conecta uma conta (Instagram, X, Facebook, LinkedIn, TikTok, YouTube, Pinterest, Reddit, Bluesky ou Threads), armazenamos o token de acesso, nome de usuário, foto de perfil e metadados necessários para publicar em seu nome.</li>
+          <li><strong>Contas de redes sociais conectadas:</strong> quando você conecta uma conta (Instagram, X, Facebook, TikTok, YouTube, Pinterest, Reddit, Bluesky ou Threads), armazenamos o token de acesso, nome de usuário, foto de perfil e metadados necessários para publicar em seu nome.</li>
           <li><strong>Conteúdo de posts:</strong> texto, imagens e agendamento dos posts que você cria e publica através da plataforma.</li>
           <li><strong>Dados de cobrança:</strong> se você assina um plano pago, o processamento do pagamento é feito pela Stripe — não armazenamos números de cartão.</li>
           <li><strong>Dados técnicos:</strong> endereço IP (usado apenas para limitar tentativas abusivas de acesso) e registros de uso da aplicação.</li>

@@ -26,10 +26,11 @@ BullMQ + Redis (worker de publicação) · SMTP (e-mails) · OpenAI (geração d
 
 | Rede | Publicar | Inbox |
 |------|----------|-------|
-| Twitter/X, LinkedIn, Threads, Instagram, Facebook | sim | sim |
+| Twitter/X, Threads, Instagram, Facebook | sim | sim |
 | Bluesky, Reddit, Pinterest | sim | — |
 | TikTok | sim — vídeo ou fotos (ver abaixo) | — |
 | YouTube | **não** — falta envio de vídeo (`src/lib/publishers/index.ts`) | — |
+| LinkedIn | **retirado do site** — conexão bloqueada em `api/social/[platform]/connect`; o publicador (`src/lib/publishers/linkedin.ts`) continua no código. Para voltar, desfaça o commit que o retirou. | — |
 
 Instagram exige imagem em todo post. Bluesky não usa OAuth: conecta com o handle e uma
 *app password* criada no próprio Bluesky. As demais só ficam conectáveis depois que as chaves

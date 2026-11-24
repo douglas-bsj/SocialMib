@@ -11,7 +11,7 @@ const geistSans = Geist({
 const BASE_URL = process.env.NEXTAUTH_URL ?? "https://social.mibtecno.com.br";
 const TITLE = "Mib Social — Gerencie todas as suas redes sociais";
 const DESCRIPTION =
-  "Agende posts, responda mensagens e analise resultados para Instagram, X, Facebook, LinkedIn, TikTok e mais — tudo em um único lugar.";
+  "Agende posts, responda mensagens e analise resultados para Instagram, X, Facebook, TikTok e mais — tudo em um único lugar.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
@@ -26,7 +26,6 @@ export const metadata: Metadata = {
     "social media management",
     "instagram scheduler",
     "twitter scheduler",
-    "linkedin scheduler",
     "social media analytics",
   ],
   authors: [{ name: "mibtecno", url: "https://mibtecno.com.br" }],

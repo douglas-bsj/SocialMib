@@ -48,7 +48,7 @@ export default function TermosPage() {
         <ul className="list-disc space-y-1.5 pl-5">
           <li>Publicar conteúdo ilegal, difamatório, discriminatório ou que viole direitos de terceiros;</li>
           <li>Usar a plataforma para envio de spam ou práticas enganosas;</li>
-          <li>Violar os termos de uso das plataformas de redes sociais que você conecta (Instagram, X, Facebook, LinkedIn, TikTok, YouTube, Pinterest, Reddit, Bluesky, Threads);</li>
+          <li>Violar os termos de uso das plataformas de redes sociais que você conecta (Instagram, X, Facebook, TikTok, YouTube, Pinterest, Reddit, Bluesky, Threads);</li>
           <li>Tentar acessar áreas ou dados de outros workspaces sem autorização;</li>
           <li>Realizar engenharia reversa, sobrecarregar ou comprometer a segurança da plataforma.</li>
         </ul>

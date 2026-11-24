@@ -45,15 +45,6 @@ const PLATFORMS = [
     isSpecial: false,
   },
   {
-    id: "linkedin",
-    name: "LinkedIn",
-    bg: "bg-blue-700",
-    text: "text-white",
-    icon: "in",
-    desc: "Compartilhe atualizações profissionais e artigos.",
-    isSpecial: false,
-  },
-  {
     id: "tiktok",
     name: "TikTok",
     bg: "bg-gray-900",
