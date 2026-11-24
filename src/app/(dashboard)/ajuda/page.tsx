@@ -109,7 +109,12 @@ const GUIDES: Guide[] = [
       "Se ainda não tem um canal, entre no YouTube com sua conta Google e crie um canal (ícone do perfil → Criar um canal).",
       "No Mib Social, vá em Contas → Conectar Conta → YouTube e autorize com a mesma conta Google.",
     ],
-    tips: ["O YouTube aceita apenas vídeos."],
+    tips: [
+      "O YouTube aceita só vídeo: MP4, MOV ou WebM, até 95 MB, um por post.",
+      "Na tela de publicar, preencha o título, a visibilidade e se o vídeo é feito para crianças. O texto do post vira a descrição.",
+      "Vídeos verticais de até 3 minutos aparecem como Shorts.",
+      "Se aparecer \"o Google não verificou este app\", clique em Avançado → Acessar Mib Social.",
+    ],
   },
   {
     id: "twitter",

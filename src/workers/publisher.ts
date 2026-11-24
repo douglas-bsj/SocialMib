@@ -5,6 +5,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Redis } from "ioredis";
 import { publish } from "../lib/publishers/index";
 import { getValidTikTokToken } from "../lib/social/tiktok";
+import { getValidYouTubeToken } from "../lib/social/youtube";
 import { parsePlatformOptions } from "../lib/tiktok-options";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
@@ -90,6 +91,19 @@ const worker = new Worker(
               prisma.socialAccount.update({
                 where: { id: socialAccount.id },
                 data: { accessToken: t.accessToken, refreshToken: t.refreshToken, expiresAt: t.expiresAt },
+              })
+            );
+          }
+          // O token do Google dura 1 hora: renova e salva antes de publicar.
+          if (socialAccount.platform === "YOUTUBE") {
+            accessToken = await getValidYouTubeToken(socialAccount, (t) =>
+              prisma.socialAccount.update({
+                where: { id: socialAccount.id },
+                data: {
+                  accessToken: t.accessToken,
+                  expiresAt: t.expiresAt,
+                  ...(t.refreshToken ? { refreshToken: t.refreshToken } : {}),
+                },
               })
             );
           }

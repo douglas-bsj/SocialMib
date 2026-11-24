@@ -20,7 +20,13 @@ import {
   type TikTokCreatorInfo,
   type TikTokOptions,
   type TikTokPrivacyLevel,
+  YOUTUBE_PRIVACY_LABELS,
+  YOUTUBE_PRIVACY_LEVELS,
+  YOUTUBE_TITLE_MAX,
+  type YouTubeOptions,
+  type YouTubePrivacy,
 } from "@/lib/tiktok-options";
+import { Input } from "@/components/ui/input";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -132,6 +138,9 @@ function PublishPageInner() {
   const [tiktokOptions, setTiktokOptions] = useState<TikTokOptions>({});
   const tiktokRequested = useRef<Set<string>>(new Set());
 
+  // YouTube: título, visibilidade e a declaração "feito para crianças".
+  const [youtubeOptions, setYoutubeOptions] = useState<YouTubeOptions>({});
+
   // AI state
   const [aiOpen, setAiOpen] = useState(false);
   const [aiTopic, setAiTopic] = useState("");
@@ -188,6 +197,9 @@ function PublishPageInner() {
 
         if (post.platformOptions?.tiktok) {
           setTiktokOptions(post.platformOptions.tiktok);
+        }
+        if (post.platformOptions?.youtube) {
+          setYoutubeOptions(post.platformOptions.youtube);
         }
       } finally {
         setLoadingEdit(false);
@@ -293,6 +305,13 @@ function PublishPageInner() {
   const hasVideo = images.some(isVideoUrl);
   const tiktokDurationTooLong =
     tiktokSelected && hasVideo && videoDuration !== null && isFinite(tiktokMaxDuration) && videoDuration > tiktokMaxDuration;
+  const youtubeSelected = accounts.some((a) => a.platform === "YOUTUBE" && selectedAccounts.includes(a.id));
+  // Vídeo, por enquanto, só sai no TikTok e no YouTube.
+  const videoBlockedPlatforms = hasVideo
+    ? [...new Set(accounts
+        .filter((a) => selectedAccounts.includes(a.id) && a.platform !== "TIKTOK" && a.platform !== "YOUTUBE")
+        .map((a) => a.platform))]
+    : [];
 
   function toggleAccount(id: string) {
     setSelectedAccounts((prev) =>
@@ -390,6 +409,28 @@ function PublishPageInner() {
         return;
       }
     }
+    if (!draft && videoBlockedPlatforms.length > 0) {
+      setError(`Vídeo, por enquanto, só é publicado no TikTok e no YouTube. Desmarque: ${videoBlockedPlatforms.join(", ")}.`);
+      return;
+    }
+    if (!draft && youtubeSelected) {
+      if (!hasVideo) {
+        setError("O YouTube exige um vídeo no post.");
+        return;
+      }
+      if (!youtubeOptions.title?.trim()) {
+        setError("Preencha o título do vídeo no YouTube.");
+        return;
+      }
+      if (!youtubeOptions.privacy) {
+        setError("Escolha a visibilidade do vídeo no YouTube.");
+        return;
+      }
+      if (typeof youtubeOptions.madeForKids !== "boolean") {
+        setError("Informe se o vídeo do YouTube é feito para crianças.");
+        return;
+      }
+    }
 
     setError("");
     setSubmitting(true);
@@ -402,7 +443,7 @@ function PublishPageInner() {
       status,
       variations: useVariations ? variations : {},
       images,
-      platformOptions: { tiktok: tiktokOptions },
+      platformOptions: { tiktok: tiktokOptions, youtube: youtubeOptions },
     };
 
     try {
@@ -791,12 +832,6 @@ function PublishPageInner() {
                   O vídeo tem {Math.round(videoDuration ?? 0)}s; esta conta pode postar até {tiktokMaxDuration}s.
                 </p>
               )}
-              {hasVideo && selectedPlatforms.some((p) => p !== "TIKTOK") && (
-                <p className="text-xs text-amber-700">
-                  Por enquanto, vídeo só é publicado no TikTok. Desmarque as outras redes ou use imagens.
-                </p>
-              )}
-
               <p className="text-xs text-gray-500">
                 Ao publicar, você concorda com a{" "}
                 <a href={TIKTOK_MUSIC_CONFIRMATION_URL} target="_blank" rel="noreferrer" className="text-violet-600 underline">
@@ -806,6 +841,95 @@ function PublishPageInner() {
               </p>
             </CardContent>
           </Card>
+        )}
+
+        {/* YouTube: título, visibilidade e "feito para crianças" (obrigatório no YouTube) */}
+        {youtubeSelected && (
+          <Card className="mb-4 border-red-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <span className="text-red-600">▶</span> Configurações do YouTube
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="yt-title" className="mb-1.5 block">Título do vídeo</Label>
+                <Input
+                  id="yt-title"
+                  value={youtubeOptions.title ?? ""}
+                  maxLength={YOUTUBE_TITLE_MAX}
+                  placeholder="Ex.: Como agendar posts em 1 minuto"
+                  onChange={(e) =>
+                    setYoutubeOptions((o) => ({ ...o, title: e.target.value.replace(/[<>]/g, "") }))
+                  }
+                />
+                <p className="mt-1 text-right text-xs text-gray-400">
+                  {(youtubeOptions.title ?? "").length}/{YOUTUBE_TITLE_MAX}
+                </p>
+              </div>
+
+              <div>
+                <Label className="mb-1.5 block">Visibilidade</Label>
+                <Select
+                  value={youtubeOptions.privacy ?? ""}
+                  onValueChange={(v) => setYoutubeOptions((o) => ({ ...o, privacy: v as YouTubePrivacy }))}
+                >
+                  <SelectTrigger className="text-sm">
+                    <SelectValue placeholder="Escolha a visibilidade" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {YOUTUBE_PRIVACY_LEVELS.map((p) => (
+                      <SelectItem key={p} value={p}>{YOUTUBE_PRIVACY_LABELS[p]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="mb-1.5 block">Este vídeo é feito para crianças?</Label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { value: false, label: "Não, não é feito para crianças" },
+                    { value: true, label: "Sim, é feito para crianças" },
+                  ].map((o) => (
+                    <button
+                      key={String(o.value)}
+                      type="button"
+                      onClick={() => setYoutubeOptions((prev) => ({ ...prev, madeForKids: o.value }))}
+                      className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                        youtubeOptions.madeForKids === o.value
+                          ? "border-violet-500 bg-violet-50 text-violet-700"
+                          : "border-gray-200 text-gray-600 hover:border-violet-300"
+                      }`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  Exigência do YouTube (lei de proteção a crianças, COPPA). Vídeos para crianças têm
+                  comentários e alguns recursos desativados.
+                </p>
+              </div>
+
+              {!hasVideo && (
+                <p className="text-xs text-amber-700">
+                  O YouTube exige um vídeo (MP4, MOV ou WebM, até 95 MB). O texto do post vira a descrição.
+                </p>
+              )}
+              {hasVideo && (
+                <p className="text-xs text-gray-500">
+                  O texto do post vira a descrição do vídeo. Vídeos verticais de até 3 minutos aparecem como Shorts.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {videoBlockedPlatforms.length > 0 && (
+          <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Por enquanto, vídeo só é publicado no TikTok e no YouTube. Desmarque {videoBlockedPlatforms.join(", ")} ou use imagens.
+          </p>
         )}
 
         {/* Options */}

@@ -7,7 +7,12 @@ import { syncWorkspaceInbox } from "@/lib/inbox/sync";
 import { uploadFile } from "@/lib/storage";
 import { ALLOWED_TYPES, MAX_FILE_SIZE } from "@/lib/storage-constants";
 import { getBaseUrl } from "@/lib/social/config";
-import { TIKTOK_PRIVACY_LEVELS, parsePlatformOptions } from "@/lib/tiktok-options";
+import {
+  TIKTOK_PRIVACY_LEVELS,
+  YOUTUBE_PRIVACY_LEVELS,
+  YOUTUBE_TITLE_MAX,
+  parsePlatformOptions,
+} from "@/lib/tiktok-options";
 import type { ApiKeyContext } from "@/lib/api-keys";
 import type { Platform, PostStatus, InboxType } from "@/generated/prisma/client";
 
@@ -108,6 +113,31 @@ const tiktokArgs = z
   })
   .optional();
 
+const YOUTUBE_INPUT_SCHEMA = {
+  type: "object",
+  description:
+    "Opções do YouTube (obrigatório ao publicar/agendar em canal do YouTube). O post precisa de um vídeo, enviado pelo site (o MCP não envia vídeos). O texto do post vira a descrição. privacy e madeForKids devem ser escolhidos pelo usuário — pergunte, não escolha sozinho.",
+  properties: {
+    title: { type: "string", maxLength: YOUTUBE_TITLE_MAX, description: "Título do vídeo (até 100 caracteres, sem < ou >)." },
+    privacy: { type: "string", enum: [...YOUTUBE_PRIVACY_LEVELS] },
+    madeForKids: { type: "boolean", description: "Declaração obrigatória do YouTube: o vídeo é feito para crianças?" },
+  },
+  additionalProperties: false,
+};
+
+const youtubeArgs = z
+  .object({
+    title: z.string().max(YOUTUBE_TITLE_MAX).optional(),
+    privacy: z.enum(YOUTUBE_PRIVACY_LEVELS).optional(),
+    madeForKids: z.boolean().optional(),
+  })
+  .optional();
+
+function optionsFromArgs(args: { tiktok?: unknown; youtube?: unknown }) {
+  if (!args.tiktok && !args.youtube) return undefined;
+  return parsePlatformOptions({ tiktok: args.tiktok, youtube: args.youtube });
+}
+
 function absoluteUrl(url: string) {
   return url.startsWith("/") ? `${getBaseUrl()}${url}` : url;
 }
@@ -133,6 +163,7 @@ function serializePost(post: NonNullable<Awaited<ReturnType<typeof getPost>>>) {
     })),
     variations: Object.fromEntries(post.variations.map((v) => [v.platform, v.content])),
     tiktok: parsePlatformOptions(post.platformOptions).tiktok ?? null,
+    youtube: parsePlatformOptions(post.platformOptions).youtube ?? null,
   };
 }
 
@@ -295,7 +326,7 @@ export const TOOLS = [
     name: "create_post",
     title: "Criar post",
     description:
-      "Cria um post em uma ou mais contas. mode: 'draft' (rascunho), 'now' (publica agora) ou 'schedule' (agenda; exige scheduledAt em ISO 8601 com fuso, ex.: 2026-12-01T09:00:00-03:00). Instagram exige pelo menos uma imagem; use upload_image_from_url para obter URLs de imagens. TikTok exige mídia (fotos JPG/WebP; vídeo só pelo site) e tiktok.privacyLevel, que o usuário precisa escolher — pergunte a ele, não escolha sozinho.",
+      "Cria um post em uma ou mais contas. mode: 'draft' (rascunho), 'now' (publica agora) ou 'schedule' (agenda; exige scheduledAt em ISO 8601 com fuso, ex.: 2026-12-01T09:00:00-03:00). Instagram exige pelo menos uma imagem; use upload_image_from_url para obter URLs de imagens. TikTok exige mídia (fotos JPG/WebP; vídeo só pelo site) e tiktok.privacyLevel, que o usuário precisa escolher — pergunte a ele, não escolha sozinho. YouTube exige um vídeo (enviado pelo site; aqui crie como rascunho) e youtube.title, youtube.privacy e youtube.madeForKids. Vídeo só é publicado no TikTok e no YouTube.",
     inputSchema: {
       type: "object",
       properties: {
@@ -310,6 +341,7 @@ export const TOOLS = [
           additionalProperties: { type: "string" },
         },
         tiktok: TIKTOK_INPUT_SCHEMA,
+        youtube: YOUTUBE_INPUT_SCHEMA,
       },
       required: ["content", "accountIds", "mode"],
       additionalProperties: false,
@@ -322,6 +354,7 @@ export const TOOLS = [
       images: z.array(z.string()).max(10).optional(),
       variations: z.record(z.string(), z.string()).optional(),
       tiktok: tiktokArgs,
+      youtube: youtubeArgs,
     }),
     run: async (args, ctx) =>
       wrapPostError(async () => {
@@ -333,7 +366,7 @@ export const TOOLS = [
           scheduledAt: args.scheduledAt ?? null,
           images: args.images,
           variations: args.variations,
-          platformOptions: args.tiktok ? parsePlatformOptions({ tiktok: args.tiktok }) : undefined,
+          platformOptions: optionsFromArgs(args),
         });
         return serializePost(post);
       }),
@@ -353,6 +386,7 @@ export const TOOLS = [
         scheduledAt: { type: "string", description: "ISO 8601 com fuso." },
         images: { type: "array", items: { type: "string" }, maxItems: 10 },
         tiktok: TIKTOK_INPUT_SCHEMA,
+        youtube: YOUTUBE_INPUT_SCHEMA,
       },
       required: ["postId"],
       additionalProperties: false,
@@ -364,6 +398,7 @@ export const TOOLS = [
       scheduledAt: z.string().optional(),
       images: z.array(z.string()).max(10).optional(),
       tiktok: tiktokArgs,
+      youtube: youtubeArgs,
     }),
     run: async (args, ctx) =>
       wrapPostError(async () => {
@@ -374,7 +409,7 @@ export const TOOLS = [
           status,
           scheduledAt: args.scheduledAt,
           images: args.images,
-          platformOptions: args.tiktok ? parsePlatformOptions({ tiktok: args.tiktok }) : undefined,
+          platformOptions: optionsFromArgs(args),
         });
         return serializePost(post);
       }),

@@ -212,7 +212,13 @@ function parseProfile(
       };
 
     case "youtube": {
-      const channel = data.items?.[0]?.snippet;
+      // Conta Google sem canal: não há onde publicar.
+      if (!data.items?.[0]?.id) {
+        throw new Error(
+          "YouTube: esta conta Google não tem um canal. Crie o canal em youtube.com e conecte de novo."
+        );
+      }
+      const channel = data.items[0].snippet;
       return {
         name: channel?.title ?? "YouTube Channel",
         username: data.items?.[0]?.id,

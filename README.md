@@ -29,7 +29,7 @@ BullMQ + Redis (worker de publicação) · SMTP (e-mails) · OpenAI (geração d
 | Twitter/X, Threads, Instagram, Facebook | sim | sim |
 | Bluesky, Reddit, Pinterest | sim | — |
 | TikTok | sim — vídeo ou fotos (ver abaixo) | — |
-| YouTube | **não** — falta envio de vídeo (`src/lib/publishers/index.ts`) | — |
+| YouTube | sim — vídeo, com título, visibilidade e "feito para crianças" | — |
 | LinkedIn | **retirado do site** — conexão bloqueada em `api/social/[platform]/connect`; o publicador (`src/lib/publishers/linkedin.ts`) continua no código. Para voltar, desfaça o commit que o retirou. | — |
 
 Instagram exige imagem em todo post. Bluesky não usa OAuth: conecta com o handle e uma
@@ -37,8 +37,8 @@ Instagram exige imagem em todo post. Bluesky não usa OAuth: conecta com o handl
 OAuth delas estiverem no Env da stack (veja [Variáveis de ambiente](#variáveis-de-ambiente)).
 
 **Vídeo:** o upload aceita MP4/MOV/WebM até 95 MB (limite de 100 MB da Cloudflare). Um post com
-vídeo leva só o vídeo e, por enquanto, só pode ir para o TikTok — as outras redes recusam vídeo
-com mensagem clara.
+vídeo leva só o vídeo e, por enquanto, só pode ir para o TikTok e o YouTube — as outras redes
+recusam vídeo com mensagem clara.
 
 ### TikTok
 
@@ -57,6 +57,22 @@ com mensagem clara.
   (até 5 usuários por dia). Para posts públicos, pedir a auditoria em
   <https://developers.tiktok.com/application/content-posting-api>.
 - Limite do TikTok: cerca de 15 posts por dia por conta.
+
+### YouTube
+
+- Código: `src/lib/publishers/youtube.ts` (upload resumable da Data API v3),
+  `src/lib/social/youtube.ts` (renovação do token). Opções em `Post.platformOptions.youtube`:
+  título (obrigatório, até 100 caracteres), visibilidade (público / não listado / privado) e
+  "feito para crianças" (declaração obrigatória do YouTube). O texto do post vira a descrição.
+- **Token:** o access token do Google dura 1 hora; o worker renova com o refresh token, por isso
+  também recebe `YOUTUBE_CLIENT_ID` e `YOUTUBE_CLIENT_SECRET`.
+- **Google Cloud:** projeto com a *YouTube Data API v3* ativada, cliente OAuth do tipo
+  "Aplicativo da Web" com o redirect `https://social.mibtecno.com.br/api/social/youtube/callback`.
+  Em modo **Teste**, só os usuários de teste cadastrados conectam e o acesso vence em 7 dias;
+  publique o app (tela de consentimento → "Publicar app") para isso não acontecer. O escopo
+  `youtube.upload` é sensível: sem a verificação do Google, o login mostra o aviso
+  "app não verificado" e o app fica limitado a 100 usuários.
+- Cota: por padrão, 100 envios de vídeo por dia por projeto do Google Cloud.
 
 ## Contas de usuário e cadastro público
 

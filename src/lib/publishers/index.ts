@@ -7,6 +7,7 @@ import { publishToInstagram } from "./instagram";
 import { publishToFacebook } from "./facebook";
 import { publishToPinterest } from "./pinterest";
 import { publishToTikTok } from "./tiktok";
+import { publishToYouTube } from "./youtube";
 import { isVideoUrl } from "../storage-constants";
 import type { PlatformOptions } from "../tiktok-options";
 
@@ -44,11 +45,11 @@ export async function publish(
   const { accessToken, username } = account;
   const images = rawImages.map(toAbsoluteUrl);
 
-  // Por enquanto só o TikTok publica vídeo; nas outras redes, erro claro em vez
-  // de tentar enviar o vídeo como se fosse imagem.
-  if (platform !== "TIKTOK" && images.some(isVideoUrl)) {
+  // Por enquanto só TikTok e YouTube publicam vídeo; nas outras redes, erro
+  // claro em vez de tentar enviar o vídeo como se fosse imagem.
+  if (platform !== "TIKTOK" && platform !== "YOUTUBE" && images.some(isVideoUrl)) {
     throw new Error(
-      `${PLATFORM_NAMES[platform] ?? platform}: vídeo ainda não é suportado nesta rede pelo Mib Social. Use imagens ou publique o vídeo só no TikTok.`
+      `${PLATFORM_NAMES[platform] ?? platform}: vídeo ainda não é suportado nesta rede pelo Mib Social. Use imagens ou publique o vídeo só no TikTok/YouTube.`
     );
   }
 
@@ -84,9 +85,7 @@ export async function publish(
       return publishToTikTok(accessToken, content, images, platformOptions.tiktok);
 
     case "YOUTUBE":
-      throw new Error(
-        "YouTube requer upload de vídeo — suporte a vídeo será adicionado em breve."
-      );
+      return publishToYouTube(accessToken, content, images, platformOptions.youtube);
 
     default:
       throw new Error(`Plataforma desconhecida: ${platform}`);

@@ -133,6 +133,9 @@ services:
       # O token do TikTok dura poucas horas: o worker renova antes de publicar.
       TIKTOK_CLIENT_KEY: ${TIKTOK_CLIENT_KEY:-}
       TIKTOK_CLIENT_SECRET: ${TIKTOK_CLIENT_SECRET:-}
+      # O token do Google (YouTube) dura 1 hora: o worker renova antes de publicar.
+      YOUTUBE_CLIENT_ID: ${YOUTUBE_CLIENT_ID:-}
+      YOUTUBE_CLIENT_SECRET: ${YOUTUBE_CLIENT_SECRET:-}
       # Opcional: versão da API do LinkedIn (AAAAMM). Vazio = padrão do código.
       LINKEDIN_API_VERSION: ${LINKEDIN_API_VERSION:-}
       NODE_ENV: production

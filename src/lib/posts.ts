@@ -42,20 +42,39 @@ function validateMediaAndOptions(
   if (videos.length > 0 && images.length > 1) {
     throw new PostError("Um post com vídeo não pode ter outras imagens ou vídeos.");
   }
-  if (status === "DRAFT" || !platforms.includes("TIKTOK")) return;
+  if (status === "DRAFT") return;
 
-  if (images.length === 0) {
-    throw new PostError("O TikTok exige um vídeo ou fotos no post.");
-  }
-  if (!options.tiktok?.privacyLevel) {
-    throw new PostError("Escolha quem pode ver o post no TikTok (privacidade).");
-  }
+  // Vídeo, por enquanto, só sai no TikTok e no YouTube.
   if (videos.length > 0) {
-    const others = platforms.filter((p) => p !== "TIKTOK");
+    const others = platforms.filter((p) => p !== "TIKTOK" && p !== "YOUTUBE");
     if (others.length > 0) {
       throw new PostError(
-        `Vídeo, por enquanto, só é publicado no TikTok. Desmarque: ${[...new Set(others)].join(", ")}.`
+        `Vídeo, por enquanto, só é publicado no TikTok e no YouTube. Desmarque: ${[...new Set(others)].join(", ")}.`
       );
+    }
+  }
+
+  if (platforms.includes("TIKTOK")) {
+    if (images.length === 0) {
+      throw new PostError("O TikTok exige um vídeo ou fotos no post.");
+    }
+    if (!options.tiktok?.privacyLevel) {
+      throw new PostError("Escolha quem pode ver o post no TikTok (privacidade).");
+    }
+  }
+
+  if (platforms.includes("YOUTUBE")) {
+    if (videos.length === 0) {
+      throw new PostError("O YouTube exige um vídeo no post.");
+    }
+    if (!options.youtube?.title) {
+      throw new PostError("Preencha o título do vídeo no YouTube.");
+    }
+    if (!options.youtube.privacy) {
+      throw new PostError("Escolha a visibilidade do vídeo no YouTube.");
+    }
+    if (typeof options.youtube.madeForKids !== "boolean") {
+      throw new PostError("Informe se o vídeo do YouTube é feito para crianças.");
     }
   }
 }
@@ -161,7 +180,11 @@ export async function updatePost(workspaceId: string, postId: string, input: Upd
   }
 
   const newImages = input.images ?? post.images;
-  const newOptions = parsePlatformOptions(input.platformOptions ?? post.platformOptions);
+  // Mescla por rede: mandar só { youtube } (ex.: pelo MCP) não apaga as opções do TikTok.
+  const newOptions = {
+    ...parsePlatformOptions(post.platformOptions),
+    ...parsePlatformOptions(input.platformOptions),
+  };
   validateMediaAndOptions(
     newStatus,
     post.socialAccounts.map((psa) => psa.socialAccount.platform),
